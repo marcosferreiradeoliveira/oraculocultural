@@ -34,4 +34,4 @@ Thumbs.db
 *.swo
 
 # Streamlit
-.streamlit/
+.streamlit/config/firebase-service-account.json
