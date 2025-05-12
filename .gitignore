@@ -1,11 +1,37 @@
+# Ambiente virtual
 .venv/
-arquivos/
-__pycache__/
 venv/
-.env
+env/
+
+# Arquivos Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
+*.pyc
+
+# Configurações e secrets
+.env
+.env.local
+.env.*.local
+*.env
+config/firebase-service-account.json  # Corrigi o nome do arquivo (era "acount")
+config/*.json  # Ignora todos arquivos JSON na pasta config
+
+# Diretórios de arquivos temporários
+arquivos/
+temp/
+tmp/
+
+# Sistema
 .DS_Store
-firebase_service_acount.json
+Thumbs.db
+
+# IDE/Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit
+.streamlit/
