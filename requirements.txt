@@ -2,7 +2,7 @@ streamlit==1.38.0
 firebase-admin==6.2.0
 google-auth==2.28.1
 google-cloud-firestore==2.15.0
-
+google-api-python-client==2.125.0
 # LangChain e dependências relacionadas
 langchain==0.3.0
 langchain-community==0.3.0
