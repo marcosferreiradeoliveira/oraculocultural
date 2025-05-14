@@ -58,6 +58,7 @@ llm = ChatOpenAI(
 
 # Inicialização do Firebase (deve ser chamada uma vez)
 def initialize_firebase():
+    """Inicializa a conexão com o Firebase e retorna status de sucesso"""
     if not firebase_admin._apps:
         try:
             # Carrega as credenciais do Secrets
@@ -82,14 +83,16 @@ def initialize_firebase():
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
             st.success("Conexão com Firebase estabelecida!")
+            return True  # Retorna True em caso de sucesso
         except Exception as e:
             st.error(f"Erro ao conectar ao Firebase: {str(e)}")
-            st.stop()
+            return False  # Retorna False em caso de falha
+    return True  # Já estava inicializado
 
 # Chama a função de inicialização
-initialize_firebase()
 # Carrega variáveis de ambiente do arquivo .env (se existir)
 load_dotenv()
+initialize_firebase()
 
 # Configuração inicial da página Streamlit
 # Deve ser a primeira chamada Streamlit, exceto para comentários e imports
