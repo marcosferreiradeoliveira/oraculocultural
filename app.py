@@ -1,4 +1,6 @@
 import tempfile
+from langchain_openai import ChatOpenAI
+
 import os # Mantido para uso potencial, ex: variáveis de ambiente
 import streamlit as st
 from dotenv import load_dotenv # Para carregar variáveis de .env
@@ -33,6 +35,11 @@ ORCAMENTO_KEY = 'orcamento'
 CRONOGRAMA_KEY = 'cronograma'
 OBJETIVOS_KEY = 'objetivos'
 JUSTIFICATIVA_KEY = 'justificativa'
+openai_api_key = st.secrets["openai"]["api_key"]
+llm = ChatOpenAI(
+    openai_api_key=openai_api_key,
+    model="gpt-3.5-turbo"
+)
 
 
 # Inicialização do Firebase (deve ser chamada uma vez)
