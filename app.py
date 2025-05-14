@@ -407,7 +407,7 @@ def pagina_detalhes_projeto():
 # Fluxo Principal da Aplicação (Router)
 def main():
     """Função principal que controla o fluxo de páginas da aplicação."""
-    if not initialize_firebase_app(): # Tenta inicializar o Firebase para o app
+    if not initialize_firebase(): # Tenta inicializar o Firebase para o app
         st.error("Falha crítica na inicialização do Firebase. A aplicação não pode continuar.")
         st.stop() # Impede a execução se o Firebase não puder ser inicializado
 
