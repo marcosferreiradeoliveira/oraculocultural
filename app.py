@@ -13,18 +13,43 @@ from models import (
     gerar_objetivos,
     gerar_justificativa)
 from loaders import carrega_pdf
+from services.firestore_service import initialize_firebase
+from paginas.pagina_editar_projeto import pagina_editar_projeto as pagina_editar_projeto_view
 
+
+initialize_firebase()
+
+# Configuração inicial
 # Configuração inicial
 st.set_page_config(
     page_title="Oráculo Cultural - Edital Vale", 
     page_icon="🎭",
-    layout="wide",  # Changed to wide for better desktop responsiveness
-    initial_sidebar_state="collapsed"
+    layout="wide",
+    initial_sidebar_state="collapsed",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
 )
 
 # CSS customizado com melhorias de responsividade
 st.markdown("""
     <style>
+            Esconde completamente o menu lateral padrão e ícone de hamburger */
+        [data-testid="stSidebarNav"],
+        [data-testid="collapsedControl"] {
+            display: none;
+        }
+        
+        /* Esconde o menu padrão do Streamlit */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        
+        /* Remove padding extra */
+        .stApp {
+            padding-top: 1rem;
+        }
         /* Esconde o menu padrão do Streamlit */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
@@ -62,6 +87,8 @@ st.markdown("""
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
     </style>
+            
+            
 """, unsafe_allow_html=True)
 
 # Carrega variáveis de ambiente
@@ -100,48 +127,33 @@ def pagina_login():
             st.image("assets/logo_edital_vale.jpg", width=300)
             
             st.title("Acesso ao Oráculo Cultural")
-            st.markdown("""
-                <style>
-                    .login-box {
-                        background-color: #f8f9fa;
-                        padding: 2rem;
-                        border-radius: 10px;
-                        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                    }
-                    .title {
-                        color: #2c3e50;
-                        text-align: center;
-                        margin-bottom: 1.5rem;
-                    }
-                </style>
-                <div class="login-box">
-                    <h3 class="title">Edital Instituto Cultural Vale 2025</h3>
-            """, unsafe_allow_html=True)
             
             # Formulário de login
             with st.form("login_form"):
                 email = st.text_input("E-mail", placeholder="seu@email.com")
                 password = st.text_input("Senha", type="password", placeholder="••••••••")
                 
-                if st.form_submit_button("Entrar", use_container_width=True):
+                submitted = st.form_submit_button("Entrar", use_container_width=True)
+                
+                if submitted:
                     try:
+                        # Aqui você deve verificar as credenciais com o Firebase Auth
+                        # Este é um exemplo - na prática você precisaria usar Firebase Auth
                         user = auth.get_user_by_email(email)
+                        
+                        # Atualiza o estado da sessão
                         st.session_state.update({
-                            'user': {'email': email, 'uid': user.uid},
-                            'autenticado': True
+                            'user': {
+                                'email': email,
+                                'uid': user.uid
+                            },
+                            'autenticado': True,
+                            'pagina_atual': 'projetos'  # Define explicitamente para onde ir após login
                         })
-                        st.rerun()
+                        st.rerun()  # Força o rerun para carregar a nova página
+                        
                     except Exception as e:
-                        st.error(f"Credenciais inválidas. Por favor, tente novamente.")
-            
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-            st.markdown("""
-                <div style="text-align: center; margin-top: 2rem; color: #7f8c8d;">
-                    <p>Em caso de problemas, contate: <a href="mailto:edital@institutoculturalvale.org">edital@institutoculturalvale.org</a></p>
-                </div>
-            """, unsafe_allow_html=True)
-
+                        st.error(f"Falha no login: {str(e)}")
 # Página de Projetos
 def pagina_projetos():
     st.title(f'Bem-vindo, {st.session_state.user["email"]}!')
@@ -150,14 +162,11 @@ def pagina_projetos():
         st.session_state.clear()
         st.rerun()
     
-    # Recuperar projetos do usuário
     projetos = get_user_projects(st.session_state.user['uid'])
     
     st.header('Meus Projetos', divider=True)
     
-    # Listar projetos existentes
     if not projetos:
-        # Criar um container centralizado para o botão quando não há projetos
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.markdown("""
@@ -167,20 +176,17 @@ def pagina_projetos():
             </div>
             """, unsafe_allow_html=True)
             
-            # Botão de criar projeto mais proeminente
             if st.button("Criar Primeiro Projeto", use_container_width=True, type="primary"):
                 st.session_state['pagina_atual'] = 'novo_projeto'
                 st.rerun()
     else:
-        # Botão para criar novo projeto no topo
         st.markdown('<div style="text-align: right; margin-bottom: 1rem;">', unsafe_allow_html=True)
         if st.button("+ Criar Novo Projeto"):
             st.session_state['pagina_atual'] = 'novo_projeto'
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Layout de grid para projetos
-        cols = st.columns(3)  # 3 colunas para desktop
+        cols = st.columns(3)
         for i, projeto in enumerate(projetos):
             col = cols[i % 3]
             with col:
@@ -193,7 +199,6 @@ def pagina_projetos():
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    # Botões de ação para cada projeto
                     col1, col2 = st.columns(2)
                     with col1:
                         if st.button(f"Editar #{projeto['id']}", key=f"editar_{projeto['id']}"):
@@ -205,7 +210,6 @@ def pagina_projetos():
                             st.session_state['projeto_selecionado'] = projeto
                             st.session_state['pagina_atual'] = 'detalhes_projeto'
                             st.rerun()
-
 # Página para Criar Novo Projeto
 def pagina_novo_projeto():
     st.header('✨ Criar Novo Projeto')
@@ -246,54 +250,8 @@ def pagina_novo_projeto():
 
 # Função para editar projeto
 def pagina_editar_projeto():
-    projeto = st.session_state.get('projeto_selecionado', {})
-    
-    st.header(f'✏️ Editar Projeto: {projeto.get("nome", "Sem Nome")}')
-    
-    with st.form("editar_projeto_form"):
-        nome = st.text_input("Nome do Projeto", value=projeto.get('nome', ''))
-        descricao = st.text_area("Descrição do Projeto", value=projeto.get('descricao', ''))
-        categoria = st.selectbox("Categoria", [
-            "Artes Visuais", 
-            "Música", 
-            "Teatro", 
-            "Dança", 
-            "Cinema", 
-            "Literatura"
-        ], index=[
-            "Artes Visuais", 
-            "Música", 
-            "Teatro", 
-            "Dança", 
-            "Cinema", 
-            "Literatura"
-        ].index(projeto.get('categoria', 'Artes Visuais')))
-        
-        if st.form_submit_button("Atualizar Projeto"):
-            try:
-                db = firestore.client()
-                projeto_atualizado = {
-                    'nome': nome,
-                    'descricao': descricao,
-                    'categoria': categoria,
-                    'data_atualizacao': firestore.SERVER_TIMESTAMP
-                }
-                
-                # Atualizar projeto no Firestore
-                db.collection('projetos').document(projeto['id']).update(projeto_atualizado)
-                
-                st.success(f"Projeto '{nome}' atualizado com sucesso!")
-                
-                # Redirecionar para página de projetos
-                st.session_state['pagina_atual'] = 'projetos'
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao atualizar projeto: {str(e)}")
-    
-    # Botão para voltar
-    if st.button("Voltar para Projetos"):
-        st.session_state['pagina_atual'] = 'projetos'
-        st.rerun()
+    pagina_editar_projeto_view()
+  
 
 # Função para mostrar detalhes do projeto
 def pagina_detalhes_projeto():
@@ -390,26 +348,27 @@ def main():
     if not initialize_firebase():
         st.stop()
 
-    # Inicializa estado da sessão
     if 'autenticado' not in st.session_state:
         st.session_state.autenticado = False
-    
-    # Verificação de autenticação
-    if not st.session_state.get('autenticado'):
+    if 'user' not in st.session_state:
+        st.session_state.user = None
+    if 'pagina_atual' not in st.session_state:
+        st.session_state.pagina_atual = 'login'
+
+    if not st.session_state.autenticado:
         pagina_login()
-        st.stop()
-    
-    # Roteamento de páginas
-    pagina_atual = st.session_state.get('pagina_atual', 'projetos')
-    
-    if pagina_atual == 'projetos':
-        pagina_projetos()
-    elif pagina_atual == 'novo_projeto':
-        pagina_novo_projeto()
-    elif pagina_atual == 'editar_projeto':
-        pagina_editar_projeto()
-    elif pagina_atual == 'detalhes_projeto':
-        pagina_detalhes_projeto()
+    else:
+        if st.session_state.pagina_atual == 'projetos':
+            pagina_projetos()
+        elif st.session_state.pagina_atual == 'novo_projeto':
+            pagina_novo_projeto()
+        elif st.session_state.pagina_atual == 'editar_projeto':
+            pagina_editar_projeto_view()  # Chamada corrigida
+        elif st.session_state.pagina_atual == 'detalhes_projeto':
+            pagina_detalhes_projeto()
+        else:
+            st.session_state.pagina_atual = 'projetos'
+            st.rerun()
 
 if __name__ == '__main__':
     main()
