@@ -7,6 +7,18 @@ from dotenv import load_dotenv # Para carregar variáveis de .env
 import firebase_admin
 from firebase_admin import credentials, firestore # auth será usado em login.py
 
+st.set_page_config(
+    page_title="Oráculo Cultural",
+    page_icon="🎭",
+    layout="wide",
+    initial_sidebar_state="collapsed", # Mantém a sidebar recolhida por padrão
+    menu_items={
+        'Get Help': None, # 'https://www.meusite.com/help',
+        'Report a bug': None, # "mailto:contato@meusite.com",
+        'About': "# Oráculo Cultural\nSua plataforma para decifrar o universo da cultura."
+    }
+)
+
 # Importações de modelos e utilitários
 from models import (
     get_llm,
@@ -24,17 +36,7 @@ from paginas.login import pagina_login # Página de login refatorada
 from paginas.pagina_editar_projeto import pagina_editar_projeto as pagina_editar_projeto_view
 
 
-st.set_page_config(
-    page_title="Oráculo Cultural",
-    page_icon="🎭",
-    layout="wide",
-    initial_sidebar_state="collapsed", # Mantém a sidebar recolhida por padrão
-    menu_items={
-        'Get Help': None, # 'https://www.meusite.com/help',
-        'Report a bug': None, # "mailto:contato@meusite.com",
-        'About': "# Oráculo Cultural\nSua plataforma para decifrar o universo da cultura."
-    }
-)
+
 # Constantes para nomes de chave do session_state
 USER_SESSION_KEY = 'user'
 AUTENTICADO_SESSION_KEY = 'autenticado'
