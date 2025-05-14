@@ -8,10 +8,19 @@ from models import (
     gerar_orcamento,
     gerar_cronograma,
     gerar_objetivos,
-    gerar_justificativa
+    gerar_justificativa,
+    gerar_etapas_trabalho,
+    gerar_ficha_tecnica
+    
 )
 from loaders import carrega_pdf
+from analise import (
+    avaliar_contra_edital,
+    comparar_com_selecionados
+)
 import re
+
+llm = get_llm()
 
 
 def pagina_editar_projeto():
@@ -126,138 +135,127 @@ def pagina_editar_projeto():
     elif seção == "🔍 Fazer Diagnóstico":
         st.header("Diagnóstico do Projeto")
         
-        if 'texto_projeto' not in st.session_state:
-            st.warning("Por favor, carregue um PDF na seção 'Carregar PDF'")
+        texto_projeto = st.session_state.get('texto_projeto') or projeto.get('texto_projeto', '')
+        texto_projeto = texto_projeto.strip()
+        if not texto_projeto:
+            st.warning("⚠️ Por favor, carregue um PDF na seção 'Carregar PDF'.")
         else:
             col1, col2 = st.columns(2)
-            
+
             with col1:
                 st.subheader("Análise Automática")
                 if st.button("Executar Diagnóstico Completo", key="btn_diagnostico"):
-                    with st.spinner("Analisando projeto..."):
+                    with st.spinner("Analisando projeto com base no edital e projetos aprovados..."):
                         try:
-                            diagnostico = {
-                                'pontos_fortes': [
-                                    "Proposta bem estruturada",
-                                    "Objetivos claros e mensuráveis",
-                                    "Público-alvo bem definido"
-                                ],
-                                'melhorias': [
-                                    "Cronograma precisa de mais detalhes",
-                                    "Orçamento pode ser mais realista",
-                                    "Falta justificativa técnica mais robusta"
-                                ]
-                            }
-                            
-                            # Salva o diagnóstico no Firestore
+                            analise_edital = avaliar_contra_edital(texto_projeto)
+                            comparativo = comparar_com_selecionados(texto_projeto)
+
+                            diagnostico_texto = f"{analise_edital}\n\n{comparativo}"
+
                             db.collection('projetos').document(projeto['id']).update({
-                                'diagnostico': diagnostico,
+                                'diagnostico_texto': diagnostico_texto,
                                 'ultima_atualizacao': firestore.SERVER_TIMESTAMP
                             })
-                            
-                            st.session_state['diagnostico'] = diagnostico
-                            st.success("Diagnóstico concluído e salvo!")
+
+                            st.session_state['diagnostico_texto'] = diagnostico_texto
+                            st.success("✅ Diagnóstico concluído e salvo!")
                         except Exception as e:
                             st.error(f"Erro ao gerar diagnóstico: {str(e)}")
-            
-            with col2:
-                st.subheader("Diagnóstico Manual")
-                anotacoes = st.text_area("Anotações e observações", 
-                                       value=projeto.get('anotacoes', ''),
-                                       height=200,
-                                       key="anotacoes_diagnostico")
-                
-                if st.button("Salvar Anotações", key="btn_salvar_anotacoes"):
-                    try:
-                        db.collection('projetos').document(projeto['id']).update({
-                            'anotacoes': anotacoes,
-                            'ultima_atualizacao': firestore.SERVER_TIMESTAMP
-                        })
-                        st.success("Anotações salvas no projeto!")
-                    except Exception as e:
-                        st.error(f"Erro ao salvar anotações: {str(e)}")
-            
-            # Mostra diagnóstico existente se disponível
-            if 'diagnostico' in st.session_state or 'diagnostico' in projeto:
-                diagnostico = st.session_state.get('diagnostico', projeto.get('diagnostico', {}))
-                
-                st.divider()
-                st.subheader("Resultados do Diagnóstico")
-                
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.markdown("✅ **Pontos Fortes**")
-                    for item in diagnostico.get('pontos_fortes', []):
-                        st.markdown(f"- {item}")
-                
-                with col_b:
-                    st.markdown("⚠️ **Sugestões de Melhoria**")
-                    for item in diagnostico.get('melhorias', []):
-                        st.markdown(f"- {item}")
+
+            # with col2:
+            #     st.subheader("Diagnóstico Manual")
+            #     anotacoes = st.text_area(
+            #         "Anotações e observações",
+            #         value=projeto.get('anotacoes', ''),
+            #         height=200,
+            #         key="anotacoes_diagnostico"
+            #     )
+
+            #     if st.button("Salvar Anotações", key="btn_salvar_anotacoes"):
+            #         try:
+            #             db.collection('projetos').document(projeto['id']).update({
+            #                 'anotacoes': anotacoes,
+            #                 'ultima_atualizacao': firestore.SERVER_TIMESTAMP
+            #             })
+            #             st.success("Anotações salvas no projeto!")
+            #         except Exception as e:
+            #             st.error(f"Erro ao salvar anotações: {str(e)}")
+
+            st.divider()
+            st.subheader("📋 Resultado do Diagnóstico")
+
+            texto_diagnostico = st.session_state.get('diagnostico_texto', projeto.get('diagnostico_texto', ''))
+            if texto_diagnostico:
+                st.text_area("Diagnóstico completo gerado", value=texto_diagnostico, height=400, disabled=True)
+            else:
+                st.info("Nenhum diagnóstico gerado ainda.")
 
     # Seção 3: Gerar Documentos
     elif seção == "📄 Gerar Documentos":
         st.header("Gerar Documentos para o Projeto")
-        
+
         if 'texto_projeto' not in st.session_state and 'texto_projeto' not in projeto:
-            st.warning("Por favor, carregue um PDF na seção 'Carregar PDF'")
+            st.warning("⚠️ Por favor, carregue um conteúdo na seção 'Carregar Projeto'")
         else:
             texto = st.session_state.get('texto_projeto', projeto.get('texto_projeto', ''))
-            
-            tipo_documento = st.selectbox(
-                "Selecione o tipo de documento:",
-                [
-                    "Resumo Executivo", 
-                    "Cronograma Detalhado", 
-                    "Orçamento Completo", 
-                    "Justificativa Técnica",
-                    "Objetivos SMART"
-                ],
-                key="sel_tipo_documento"
-            )
-            
-            if st.button(f"Gerar {tipo_documento}", key=f"btn_gerar_{tipo_documento}"):
-                with st.spinner(f"Gerando {tipo_documento}..."):
+            diagnostico = projeto.get('diagnostico_texto', '')
+
+            tipos = {
+                "Resumo Executivo": "resumo_executivo",
+                "Cronograma Detalhado": "cronograma_detalhado",
+                "Orçamento Completo": "orcamento_completo",
+                "Justificativa Técnica": "justificativa_tecnica",
+                "Objetivos SMART": "objetivos_smart",
+                "Etapas de Trabalho": "etapas_trabalho",
+                "Ficha Técnica": "ficha_tecnica"
+            }
+
+            tipo_selecionado = st.selectbox("Selecione o tipo de documento:", list(tipos.keys()), key="sel_tipo_documento")
+            chave = tipos[tipo_selecionado]
+
+            if st.button(f"Gerar {tipo_selecionado}", key=f"btn_gerar_{chave}"):
+                with st.spinner(f"Gerando {tipo_selecionado}..."):
                     try:
                         llm = get_llm()
-                        if tipo_documento == "Resumo Executivo":
-                            documento = gerar_resumo_projeto(llm, texto)
-                        elif tipo_documento == "Cronograma Detalhado":
-                            documento = gerar_cronograma(llm, texto)
-                        elif tipo_documento == "Orçamento Completo":
-                            documento = gerar_orcamento(llm, texto)
-                        elif tipo_documento == "Justificativa Técnica":
-                            documento = gerar_justificativa(llm, texto)
-                        elif tipo_documento == "Objetivos SMART":
-                            documento = gerar_objetivos(llm, texto)
-                        
-                        st.session_state['documento_gerado'] = documento
-                        st.success(f"{tipo_documento} gerado com sucesso!")
+                        func_map = {
+                            "resumo_executivo": gerar_resumo_projeto,
+                            "cronograma_detalhado": gerar_cronograma,
+                            "orcamento_completo": gerar_orcamento,
+                            "justificativa_tecnica": gerar_justificativa,
+                            "objetivos_smart": gerar_objetivos,
+                            "etapas_trabalho": gerar_etapas_trabalho,
+                            "ficha_tecnica": gerar_ficha_tecnica
+                        }
+
+                        documento = func_map[chave](llm, texto, diagnostico)
+                        st.session_state[chave] = documento
+                        st.success(f"{tipo_selecionado} gerado com sucesso!")
                     except Exception as e:
                         st.error(f"Erro ao gerar documento: {str(e)}")
-            
-            if 'documento_gerado' in st.session_state:
+
+            if chave in st.session_state:
                 st.divider()
-                st.subheader(f"📝 {tipo_documento}")
-                st.text_area("Conteúdo gerado", st.session_state['documento_gerado'], height=300, key="area_documento")
-                
+                st.subheader(f"📝 {tipo_selecionado}")
+                st.text_area("Conteúdo gerado", st.session_state[chave], height=300, key=f"area_{chave}")
+
                 col1, col2 = st.columns(2)
                 with col1:
                     st.download_button(
                         label="⏬ Baixar Documento",
-                        data=st.session_state['documento_gerado'],
-                        file_name=f"{tipo_documento.replace(' ', '_')}.txt",
+                        data=st.session_state[chave],
+                        file_name=f"{chave}.txt",
                         mime="text/plain",
-                        key="btn_download_doc"
+                        key=f"btn_download_{chave}"
                     )
                 with col2:
-                    if st.button("Salvar no Projeto", key="btn_salvar_doc"):
+                    if st.button("Salvar no Projeto", key=f"btn_salvar_{chave}"):
                         try:
-                            doc_ref = db.collection('projetos').document(projeto['id'])
-                            doc_ref.update({
-                                f'documentos.{tipo_documento.replace(" ", "_").lower()}': st.session_state['documento_gerado'],
+                            db.collection('projetos').document(projeto['id']).update({
+                                f'documentos.{chave}': st.session_state[chave],
                                 'ultima_atualizacao': firestore.SERVER_TIMESTAMP
                             })
                             st.success("Documento salvo no projeto!")
                         except Exception as e:
                             st.error(f"Erro ao salvar documento: {str(e)}")
+
+
