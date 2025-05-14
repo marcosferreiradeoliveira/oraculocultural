@@ -1,445 +1,420 @@
 import tempfile
-import os
+import os # Mantido para uso potencial, ex: variáveis de ambiente
 import streamlit as st
-from langchain.memory import ConversationBufferMemory
-from dotenv import load_dotenv
+from dotenv import load_dotenv # Para carregar variáveis de .env
 import firebase_admin
-from firebase_admin import credentials, auth, firestore
+from firebase_admin import credentials, firestore # auth será usado em login.py
+
+# Importações de modelos e utilitários
 from models import (
     get_llm,
     gerar_resumo_projeto,
     gerar_orcamento,
     gerar_cronograma,
     gerar_objetivos,
-    gerar_justificativa)
+    gerar_justificativa
+)
 from loaders import carrega_pdf
-from services.firestore_service import initialize_firebase
+# Removido: from services.firestore_service import initialize_firebase (a função está definida abaixo)
+
+# Importações de páginas
+from paginas.login import pagina_login # Página de login refatorada
 from paginas.pagina_editar_projeto import pagina_editar_projeto as pagina_editar_projeto_view
 
+# Constantes para nomes de chave do session_state
+USER_SESSION_KEY = 'user'
+AUTENTICADO_SESSION_KEY = 'autenticado'
+PAGINA_ATUAL_SESSION_KEY = 'pagina_atual'
+PROJETO_SELECIONADO_KEY = 'projeto_selecionado'
+TEXTO_PROJETO_KEY = 'texto_projeto' # Para o texto do PDF carregado
+# Para documentos gerados
+RESUMO_KEY = 'resumo'
+ORCAMENTO_KEY = 'orcamento'
+CRONOGRAMA_KEY = 'cronograma'
+OBJETIVOS_KEY = 'objetivos'
+JUSTIFICATIVA_KEY = 'justificativa'
 
-initialize_firebase()
 
-# Configuração inicial
-# Configuração inicial
-st.set_page_config(
-    page_title="Oráculo Cultural - Edital Vale", 
-    page_icon="🎭",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-    menu_items={
-        'Get Help': None,
-        'Report a bug': None,
-        'About': None
-    }
-)
-
-# CSS customizado com melhorias de responsividade
-st.markdown("""
-    <style>
-            Esconde completamente o menu lateral padrão e ícone de hamburger */
-        [data-testid="stSidebarNav"],
-        [data-testid="collapsedControl"] {
-            display: none;
-        }
-        
-        /* Esconde o menu padrão do Streamlit */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        
-        /* Remove padding extra */
-        .stApp {
-            padding-top: 1rem;
-        }
-        /* Esconde o menu padrão do Streamlit */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        
-        /* Botão de login */
-        .stButton>button {
-            background-color: #e74c3c;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            width: 100%;
-        }
-        
-        /* Campos de input */
-        .stTextInput>div>div>input, .stTextArea>div>div>textarea {
-            padding: 0.5rem;
-        }
-
-        /* Ajustes de responsividade */
-        @media screen and (min-width: 1024px) {
-            .main .block-container {
-                max-width: 90%;
-                padding-left: 2rem;
-                padding-right: 2rem;
-            }
-        }
-
-        /* Estilo para cartões de projetos */
-        .project-card {
-            background-color: #f8f9fa;
-            border-radius: 10px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-    </style>
-            
-            
-""", unsafe_allow_html=True)
-
-# Carrega variáveis de ambiente
-load_dotenv()
-
-# Inicialização do Firebase
-def initialize_firebase():
+# Inicialização do Firebase (deve ser chamada uma vez)
+def initialize_firebase_app():
+    """
+    Inicializa o Firebase Admin SDK para o app principal se não estiver inicializado.
+    Retorna True se sucesso, False caso contrário.
+    """
     if not firebase_admin._apps:
         try:
-            cred_path = "config/firebase-service-account.json"
+            cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY_PATH", "config/firebase-service-account.json")
+            if not os.path.exists(cred_path):
+                st.error(f"Arquivo de credenciais do Firebase não encontrado em: {cred_path}. Configure a variável de ambiente FIREBASE_SERVICE_ACCOUNT_KEY_PATH ou coloque o arquivo no caminho padrão.")
+                return False
             cred = credentials.Certificate(cred_path)
             firebase_admin.initialize_app(cred)
+            # st.toast("Firebase inicializado para o app principal.", icon="🚀") # Opcional
             return True
         except Exception as e:
-            st.error(f"Erro ao inicializar Firebase: {str(e)}")
+            st.error(f"Erro crítico ao inicializar Firebase para o app: {str(e)}")
             return False
     return True
 
-# Função para recuperar projetos do usuário
+# Carrega variáveis de ambiente do arquivo .env (se existir)
+load_dotenv()
+
+# Configuração inicial da página Streamlit
+# Deve ser a primeira chamada Streamlit, exceto para comentários e imports
+st.set_page_config(
+    page_title="Oráculo Cultural",
+    page_icon="🎭",
+    layout="wide",
+    initial_sidebar_state="collapsed", # Mantém a sidebar recolhida por padrão
+    menu_items={
+        'Get Help': None, # 'https://www.meusite.com/help',
+        'Report a bug': None, # "mailto:contato@meusite.com",
+        'About': "# Oráculo Cultural\nSua plataforma para decifrar o universo da cultura."
+    }
+)
+
+# CSS customizado global (aplicado a todas as páginas, exceto se sobrescrito)
+# O CSS da página de login agora está em paginas/login.py
+st.markdown("""
+    <style>
+        /* Esconde o menu lateral padrão e ícone de hamburger globalmente */
+        /* A menos que a página de login precise deles visíveis, o que não é o caso */
+        /* div[data-testid="stSidebarNav"], div[data-testid="collapsedControl"] {
+            display: none !important;
+        } */
+        
+        /* Esconde o menu padrão do Streamlit (MainMenu) e o rodapé (footer) */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        
+        /* Remove padding extra no topo do app se não for a página de login */
+        /* Ajuste fino pode ser necessário dependendo da estrutura das outras páginas */
+        /* .stApp > div:first-child > div:first-child > div:first-child { padding-top: 1rem; } */
+
+        /* Estilo para cartões de projetos (usado em pagina_projetos) */
+        .project-card {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem; /* Aumentado o padding */
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Sombra um pouco mais pronunciada */
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .project-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        .project-card h3 {
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            color: #333;
+        }
+        .project-card p {
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        /* Ajustes de responsividade para o container principal em telas maiores */
+        @media screen and (min-width: 1024px) {
+            .main .block-container {
+                max-width: 90%; /* Ou o valor que preferir, ex: 1200px */
+                /* padding-left: 2rem; */ /* Removido para usar o padding padrão ou específico da página */
+                /* padding-right: 2rem; */
+            }
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+
+# Função para recuperar projetos do usuário do Firestore
 def get_user_projects(user_id):
+    """Recupera os projetos de um usuário específico do Firestore."""
     try:
         db = firestore.client()
-        projetos_ref = db.collection('projetos').where('user_id', '==', user_id)
-        projetos = projetos_ref.stream()
-        return [{'id': doc.id, **doc.to_dict()} for doc in projetos]
+        projetos_ref = db.collection('projetos').where('user_id', '==', user_id).order_by('data_criacao', direction=firestore.Query.DESCENDING)
+        projetos_stream = projetos_ref.stream() # Renomeado para evitar conflito com a lista
+        projetos_lista = [{'id': doc.id, **doc.to_dict()} for doc in projetos_stream]
+        return projetos_lista
     except Exception as e:
         st.error(f"Erro ao recuperar projetos: {str(e)}")
         return []
 
-# Página de Login
-import streamlit as st
-import firebase_admin
-from firebase_admin import auth
-
-import streamlit as st
-import firebase_admin # Assuming firebase_admin is initialized elsewhere if needed by auth
-from firebase_admin import auth
-
-def pagina_login():
-    st.markdown(
-        """
-        <style>
-            body {
-                background-color: #f0f2f5; /* Cor de fundo geral da página */
-            }
-            .login-container {
-                background-color: rgba(255, 255, 255, 0.9); /* Fundo branco semi-transparente */
-                padding: 2rem;
-                border-radius: 10px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                width: 80%; /* Largura do container */
-                max-width: 400px; /* Largura máxima */
-                margin: 100px auto; /* Centralizar vertical e horizontalmente */
-                text-align: center;
-            }
-            .login-container img {
-                width: 150px; /* Ajuste o tamanho do logo */
-                margin-bottom: 1rem;
-            }
-            .login-container h2 {
-                color: #333;
-                margin-bottom: 1.5rem;
-            }
-            .login-container input[type="text"],
-            .login-container input[type="password"] {
-                width: 100%;
-                padding: 0.75rem;
-                margin-bottom: 1rem;
-                border: 1px solid #ccc;
-                border-radius: 5px;
-                box-sizing: border-box; /* Para que o padding não aumente a largura */
-            }
-            .login-container button {
-                background-color: #e74c3c; /* Cor do botão (exemplo) */
-                color: white;
-                border: none;
-                padding: 0.75rem 1rem;
-                border-radius: 5px;
-                cursor: pointer;
-                width: 100%;
-            }
-            .login-container button:hover {
-                background-color: #c0392b; /* Cor do botão no hover (exemplo) */
-            }
-            .login-container .forgot-password {
-                margin-top: 0.5rem;
-                font-size: 0.9rem;
-            }
-            .login-container .signup-link {
-                margin-top: 1rem;
-                font-size: 0.9rem;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    with st.container(): # Outer container for column layout
-        col1, col2, col3 = st.columns([1, 3, 1])
-
-        with col2: # Middle column for the login box
-            # Use st.markdown to create a div with the class "login-container".
-            # This div will be styled by the .login-container CSS rules.
-            # The original st.container(border=True, classes="login-container") is replaced by this approach.
-            st.markdown('<div class="login-container">', unsafe_allow_html=True)
-            
-            st.image("assets/logo_edital_vale.jpg", width=150) # Ensure path is correct
-            st.title("Acesso ao Oráculo Cultural") # st.title might be too large, consider st.header or st.subheader
-
-            with st.form("login_form"):
-                email = st.text_input("E-mail", placeholder="seu@email.com")
-                password = st.text_input("Senha", type="password", placeholder="••••••••")
-                submitted = st.form_submit_button("Entrar", use_container_width=True)
-
-                if submitted:
-                    try:
-                        # Ensure Firebase is initialized before calling auth functions
-                        if not firebase_admin._apps:
-                            # This is a fallback, ideally Firebase is initialized once globally
-                            # Consider moving initialize_firebase() call to the top of main() or app startup
-                            st.error("Firebase não inicializado. Por favor, contate o suporte.")
-                        else:
-                            user = auth.get_user_by_email(email)
-                            # Assuming st.session_state is available
-                            st.session_state.update({
-                                'user': {'email': email, 'uid': user.uid},
-                                'autenticado': True,
-                                'pagina_atual': 'projetos'
-                            })
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Falha no login: Verifique seu e-mail e senha. Detalhe: {str(e)}")
-            
-            st.markdown('<p class="forgot-password"><a href="#">Esqueci minha senha</a></p>', unsafe_allow_html=True)
-            st.markdown('<p class="signup-link">Novo por aqui? <a href="#">Cadastre-se</a></p>', unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True) # Close the div.login-container
 # Página de Projetos
 def pagina_projetos():
-    st.title(f'Bem-vindo, {st.session_state.user["email"]}!')
+    """Exibe a página de listagem de projetos do usuário."""
+    if not st.session_state.get(USER_SESSION_KEY):
+        st.warning("Usuário não logado.")
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+        st.rerun()
+        return
+
+    st.title(f'Bem-vindo(a), {st.session_state[USER_SESSION_KEY]["email"]}!')
     
-    if st.button("Sair", key="logout_button"):
-        st.session_state.clear()
+    if st.button("Sair", key="logout_button_projetos"):
+        # Limpa o estado da sessão relacionado ao usuário
+        for key in [USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PROJETO_SELECIONADO_KEY, TEXTO_PROJETO_KEY, RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY, OBJETIVOS_KEY, JUSTIFICATIVA_KEY]:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login' # Define a página de login como a próxima
+        st.success("Você saiu da sua conta.")
         st.rerun()
     
-    projetos = get_user_projects(st.session_state.user['uid'])
+    projetos = get_user_projects(st.session_state[USER_SESSION_KEY]['uid'])
     
-    st.header('Meus Projetos', divider=True)
+    st.header('Meus Projetos Culturais', divider='rainbow')
     
+    # Botão para criar novo projeto sempre visível no topo
+    if st.button("🎨 Criar Novo Projeto", type="primary", use_container_width=False): # Ajuste use_container_width conforme preferir
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'novo_projeto'
+        # Limpa dados de projeto selecionado ou texto de projeto anterior
+        if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
+        if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
+        st.rerun()
+
     if not projetos:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown("""
-            <div style="text-align: center; padding: 2rem; background-color: #f8f9fa; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <h3>Você ainda não tem projetos</h3>
-                <p>Comece criando seu primeiro projeto!</p>
+        st.markdown("""
+            <div style="text-align: center; padding: 3rem 1rem; background-color: #e9ecef; border-radius: 10px; margin-top: 2rem;">
+                <h3>Você ainda não tem projetos cadastrados.</h3>
+                <p>Clique em "Criar Novo Projeto" para começar sua jornada cultural!</p>
             </div>
             """, unsafe_allow_html=True)
-            
-            if st.button("Criar Primeiro Projeto", use_container_width=True, type="primary"):
-                st.session_state['pagina_atual'] = 'novo_projeto'
-                st.rerun()
     else:
-        st.markdown('<div style="text-align: right; margin-bottom: 1rem;">', unsafe_allow_html=True)
-        if st.button("+ Criar Novo Projeto"):
-            st.session_state['pagina_atual'] = 'novo_projeto'
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        cols = st.columns(3)
+        # Exibição dos projetos em colunas responsivas
+        # Define o número de colunas com base na largura da tela (aproximação)
+        # Este é um placeholder, Streamlit não tem detecção de largura de tela direta para Python.
+        # Para um layout verdadeiramente responsivo de colunas, considere o número de itens.
+        num_cols = 3 # min(len(projetos), 3) # Exibe no máximo 3 colunas
+        
+        cols = st.columns(num_cols)
         for i, projeto in enumerate(projetos):
-            col = cols[i % 3]
-            with col:
-                with st.container(border=True):
-                    st.markdown(f"""
-                        <div class="project-card">
-                            <h3>{projeto.get('nome', 'Projeto sem nome')}</h3>
-                            <p><strong>Categoria:</strong> {projeto.get('categoria', 'Não definida')}</p>
-                            <p>{projeto.get('descricao', 'Sem descrição')[:100]}...</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button(f"Editar #{projeto['id']}", key=f"editar_{projeto['id']}"):
-                            st.session_state['projeto_selecionado'] = projeto
-                            st.session_state['pagina_atual'] = 'editar_projeto'
-                            st.rerun()
-                    with col2:
-                        if st.button(f"Detalhes #{projeto['id']}", key=f"detalhes_{projeto['id']}"):
-                            st.session_state['projeto_selecionado'] = projeto
-                            st.session_state['pagina_atual'] = 'detalhes_projeto'
-                            st.rerun()
+            col_index = i % num_cols
+            with cols[col_index]:
+                # Usando st.markdown para aplicar a classe .project-card
+                st.markdown(f""" 
+                <div class="project-card">
+                    <h3>{projeto.get('nome', 'Projeto sem nome')}</h3>
+                    <p><strong>Categoria:</strong> {projeto.get('categoria', 'Não definida')}</p>
+                    <p>{projeto.get('descricao', 'Sem descrição')[:100]}...</p>
+                </div>
+                """, unsafe_allow_html=True)
+                # Botões dentro de um container normal do Streamlit para funcionalidade
+                # Idealmente, os botões seriam parte do card HTML, mas isso complica a interatividade do Streamlit
+                
+                # Botões de ação para cada projeto
+                btn_cols = st.columns(2)
+                with btn_cols[0]:
+                    if st.button(f"📝 Editar", key=f"editar_{projeto['id']}", use_container_width=True):
+                        st.session_state[PROJETO_SELECIONADO_KEY] = projeto
+                        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
+                        st.rerun()
+                with btn_cols[1]:
+                    if st.button(f"🔍 Detalhes", key=f"detalhes_{projeto['id']}", use_container_width=True):
+                        st.session_state[PROJETO_SELECIONADO_KEY] = projeto
+                        # Limpa documentos gerados anteriormente ao ver detalhes de um novo projeto
+                        for key_doc in [RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY, OBJETIVOS_KEY, JUSTIFICATIVA_KEY, TEXTO_PROJETO_KEY]:
+                            if key_doc in st.session_state: del st.session_state[key_doc]
+                        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'detalhes_projeto'
+                        st.rerun()
+                st.markdown("---") # Separador visual entre os cards na mesma coluna
+
+
 # Página para Criar Novo Projeto
 def pagina_novo_projeto():
-    st.header('✨ Criar Novo Projeto')
+    """Exibe o formulário para criar um novo projeto cultural."""
+    st.header('✨ Criar Novo Projeto Cultural')
     
     with st.form("novo_projeto_form"):
-        nome = st.text_input("Nome do Projeto")
-        descricao = st.text_area("Descrição do Projeto")
-        categoria = st.selectbox("Categoria", [
-            "Artes Visuais", 
-            "Música", 
-            "Teatro", 
-            "Dança", 
-            "Cinema", 
-            "Literatura"
-        ])
+        nome = st.text_input("Nome do Projeto*", help="O título principal do seu projeto.")
+        descricao = st.text_area("Descrição Detalhada do Projeto*", height=150, help="Descreva os objetivos, público-alvo, e o que torna seu projeto único.")
+        categoria = st.selectbox("Categoria Principal*", [
+            "Artes Visuais", "Música", "Teatro", "Dança", 
+            "Cinema e Audiovisual", "Literatura e Publicações", 
+            "Patrimônio Cultural", "Artesanato", "Cultura Popular", "Outra"
+        ], help="Selecione a categoria que melhor descreve seu projeto.")
         
-        if st.form_submit_button("Salvar Projeto"):
-            try:
-                db = firestore.client()
-                novo_projeto = {
-                    'nome': nome,
-                    'descricao': descricao,
-                    'categoria': categoria,
-                    'user_id': st.session_state.user['uid'],
-                    'data_criacao': firestore.SERVER_TIMESTAMP
-                }
-                
-                # Salvar projeto no Firestore
-                doc_ref = db.collection('projetos').add(novo_projeto)
-                
-                st.success(f"Projeto '{nome}' criado com sucesso!")
-                
-                # Redirecionar para página de projetos
-                st.session_state['pagina_atual'] = 'projetos'
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao salvar projeto: {str(e)}")
+        # Adicionar mais campos se necessário (ex: data de início, local, etc.)
 
-# Função para editar projeto
-def pagina_editar_projeto():
-    pagina_editar_projeto_view()
-  
+        submitted = st.form_submit_button("🚀 Salvar Projeto")
+        
+        if submitted:
+            if not nome or not descricao or not categoria:
+                st.error("Por favor, preencha todos os campos obrigatórios (*).")
+            else:
+                try:
+                    db = firestore.client()
+                    user_uid = st.session_state.get(USER_SESSION_KEY, {}).get('uid')
+                    if not user_uid:
+                        st.error("Erro: Usuário não identificado. Faça login novamente.")
+                        return
 
-# Função para mostrar detalhes do projeto
-def pagina_detalhes_projeto():
-    projeto = st.session_state.get('projeto_selecionado', {})
+                    novo_projeto_data = {
+                        'nome': nome,
+                        'descricao': descricao,
+                        'categoria': categoria,
+                        'user_id': user_uid,
+                        'data_criacao': firestore.SERVER_TIMESTAMP,
+                        'data_atualizacao': firestore.SERVER_TIMESTAMP,
+                        # Adicione outros campos conforme necessário
+                    }
+                    
+                    # Salva o novo projeto no Firestore
+                    db.collection('projetos').add(novo_projeto_data)
+                    
+                    st.success(f"Projeto '{nome}' criado com sucesso!")
+                    st.balloons()
+                    
+                    # Redireciona para a página de projetos
+                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao salvar projeto: {str(e)}")
     
-    st.header(f'🔍 Detalhes do Projeto: {projeto.get("nome", "Sem Nome")}')
-    
-    # Opções de geração de documentos
-    st.header("📑 Geração de Documentos", divider=True)
-    
-    # Verificar se o projeto tem um PDF carregado
-    if 'texto_projeto' not in st.session_state:
-        st.info("⚠️ Carregue um PDF do projeto para gerar documentos.")
-        arquivo = st.file_uploader("Selecione o arquivo PDF do projeto", type=["pdf"])
-
-        if arquivo:
-            with tempfile.NamedTemporaryFile(suffix=".pdf") as temp:
-                temp.write(arquivo.read())
-                texto_projeto = carrega_pdf(temp.name)
-                st.session_state['texto_projeto'] = texto_projeto
-                st.success("✅ Documento carregado com sucesso!")
-    
-    if 'texto_projeto' in st.session_state:
-        # Tabs para geração de documentos
-        tabs = st.tabs(["📝 Resumo", "💰 Orçamento", "📅 Cronograma", "🎯 Objetivos", "📚 Justificativa"])
-
-        with tabs[0]:
-            if st.button("Gerar Resumo"):
-                with st.spinner("Criando..."):
-                    st.session_state['resumo'] = gerar_resumo_projeto(get_llm(), st.session_state['texto_projeto'])
-                    st.success("✅ Resumo pronto.")
-            if 'resumo' in st.session_state:
-                st.subheader("📝 Resumo")
-                st.write(st.session_state['resumo'])
-
-        with tabs[1]:
-            if st.button("Gerar Orçamento"):
-                with st.spinner("Criando..."):
-                    st.session_state['orcamento'] = gerar_orcamento(get_llm(), st.session_state['texto_projeto'])
-                    st.success("✅ Orçamento pronto.")
-            if 'orcamento' in st.session_state:
-                st.subheader("💰 Orçamento")
-                st.write(st.session_state['orcamento'])
-
-        with tabs[2]:
-            if st.button("Gerar Cronograma"):
-                with st.spinner("Criando..."):
-                    st.session_state['cronograma'] = gerar_cronograma(get_llm(), st.session_state['texto_projeto'])
-                    st.success("✅ Cronograma pronto.")
-            if 'cronograma' in st.session_state:
-                st.subheader("📅 Cronograma")
-                st.write(st.session_state['cronograma'])
-
-        with tabs[3]:
-            if st.button("Gerar Objetivos SMART"):
-                with st.spinner("Criando..."):
-                    st.session_state['objetivos'] = gerar_objetivos(get_llm(), st.session_state['texto_projeto'])
-                    st.success("✅ Objetivos prontos.")
-            if 'objetivos' in st.session_state:
-                st.subheader("🎯 Objetivos")
-                st.write(st.session_state['objetivos'])
-
-        with tabs[4]:
-            if st.button("Gerar Justificativa Técnica"):
-                with st.spinner("Criando..."):
-                    st.session_state['justificativa'] = gerar_justificativa(get_llm(), st.session_state['texto_projeto'])
-                    st.success("✅ Justificativa pronta.")
-            if 'justificativa' in st.session_state:
-                st.subheader("📚 Justificativa Técnica")
-                st.write(st.session_state['justificativa'])
-
-        # Área de download
-        st.divider()
-        with st.expander("💾 Baixar Documentos Gerados"):
-            doc_cols = st.columns(4)
-            if 'resumo' in st.session_state:
-                doc_cols[0].download_button("⏬ Resumo", st.session_state['resumo'], "resumo.txt")
-            if 'orcamento' in st.session_state:
-                doc_cols[1].download_button("⏬ Orçamento", st.session_state['orcamento'], "orcamento.txt")
-            if 'cronograma' in st.session_state:
-                doc_cols[2].download_button("⏬ Cronograma", st.session_state['cronograma'], "cronograma.txt")
-            if 'objetivos' in st.session_state:
-                doc_cols[3].download_button("⏬ Objetivos", st.session_state['objetivos'], "objetivos.txt")
-            if 'justificativa' in st.session_state:
-                st.download_button("⏬ Justificativa", st.session_state['justificativa'], "justificativa.txt")
-    
-    # Botão para voltar
-    if st.button("Voltar para Projetos"):
-        st.session_state['pagina_atual'] = 'projetos'
+    if st.button("⬅️ Voltar para Projetos"):
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
         st.rerun()
 
-# Fluxo Principal
+
+# Função para mostrar detalhes do projeto e gerar documentos
+def pagina_detalhes_projeto():
+    """Exibe os detalhes de um projeto selecionado e opções para gerar documentos."""
+    projeto = st.session_state.get(PROJETO_SELECIONADO_KEY)
+    
+    if not projeto:
+        st.warning("Nenhum projeto selecionado. Retornando à lista de projetos.")
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
+        st.rerun()
+        return
+
+    st.header(f'🔍 Detalhes do Projeto: {projeto.get("nome", "Sem Nome")}')
+    st.caption(f"Categoria: {projeto.get('categoria', 'N/A')}")
+    st.markdown(f"**Descrição:**\n {projeto.get('descricao', 'Sem descrição.')}")
+    st.markdown("---")
+
+    # Opções de geração de documentos
+    st.subheader("📑 Assistente de Geração de Documentos", divider='blue')
+    
+    # Carregamento do PDF do projeto
+    if TEXTO_PROJETO_KEY not in st.session_state:
+        st.info("⚠️ Para gerar os documentos, por favor, carregue o arquivo PDF principal do seu projeto.")
+        arquivo_pdf = st.file_uploader("Selecione o arquivo PDF do projeto", type=["pdf"], key="pdf_uploader_detalhes")
+
+        if arquivo_pdf:
+            with st.spinner("Processando PDF... Por favor, aguarde."):
+                try:
+                    # Salva o arquivo temporariamente para leitura
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                        tmp_file.write(arquivo_pdf.getvalue())
+                        caminho_tmp_pdf = tmp_file.name
+                    
+                    texto_extraido = carrega_pdf(caminho_tmp_pdf) # Função que extrai texto do PDF
+                    os.remove(caminho_tmp_pdf) # Remove o arquivo temporário
+
+                    if texto_extraido:
+                        st.session_state[TEXTO_PROJETO_KEY] = texto_extraido
+                        st.success("✅ PDF carregado e processado com sucesso!")
+                        st.rerun() # Recarrega para mostrar as abas de geração
+                    else:
+                        st.error("Não foi possível extrair texto do PDF. Tente outro arquivo ou verifique o formato.")
+                except Exception as e:
+                    st.error(f"Erro ao processar PDF: {e}")
+                    if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY] # Limpa em caso de erro
+    
+    if TEXTO_PROJETO_KEY in st.session_state:
+        texto_base_projeto = st.session_state[TEXTO_PROJETO_KEY]
+        st.success("Pronto para gerar documentos com base no PDF carregado!")
+
+        # Abas para cada tipo de documento a ser gerado
+        tab_titles = ["📝 Resumo", "💰 Orçamento", "📅 Cronograma", "🎯 Objetivos", "📚 Justificativa"]
+        tabs = st.tabs(tab_titles)
+
+        doc_generators = {
+            "Resumo": (gerar_resumo_projeto, RESUMO_KEY),
+            "Orçamento": (gerar_orcamento, ORCAMENTO_KEY),
+            "Cronograma": (gerar_cronograma, CRONOGRAMA_KEY),
+            "Objetivos": (gerar_objetivos, OBJETIVOS_KEY),
+            "Justificativa": (gerar_justificativa, JUSTIFICATIVA_KEY),
+        }
+
+        for i, title_prefix in enumerate(tab_titles):
+            doc_type = title_prefix.split(" ")[1] # Ex: "Resumo"
+            generator_func, session_key = doc_generators[doc_type]
+            
+            with tabs[i]:
+                st.markdown(f"#### Gerar {doc_type} do Projeto")
+                if st.button(f"Gerar {doc_type} Agora", key=f"gerar_{doc_type.lower()}_btn"):
+                    with st.spinner(f"Elaborando {doc_type}... Isso pode levar alguns instantes."):
+                        try:
+                            llm_instance = get_llm() # Obtém a instância do LLM
+                            documento_gerado = generator_func(llm_instance, texto_base_projeto)
+                            st.session_state[session_key] = documento_gerado
+                            st.success(f"✅ {doc_type} gerado com sucesso!")
+                        except Exception as e:
+                            st.error(f"Erro ao gerar {doc_type}: {e}")
+                
+                if session_key in st.session_state:
+                    st.subheader(f"Visualização do {doc_type}:")
+                    st.markdown(f"```\n{st.session_state[session_key]}\n```" if doc_type in ["Orçamento", "Cronograma"] else st.session_state[session_key]) # Usa ``` para preservar formatação
+                    st.download_button(
+                        label=f"📥 Baixar {doc_type}",
+                        data=st.session_state[session_key].encode('utf-8'), # Garante encoding para download
+                        file_name=f"{doc_type.lower()}_{projeto.get('nome', 'projeto').replace(' ', '_')}.txt",
+                        mime="text/plain",
+                        key=f"download_{doc_type.lower()}"
+                    )
+        st.markdown("---")
+        if st.button("🗑️ Recarregar outro PDF", key="recarregar_pdf_btn"):
+            if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
+            # Limpa também os documentos gerados para evitar confusão
+            for _, session_k in doc_generators.values():
+                if session_k in st.session_state: del st.session_state[session_k]
+            st.rerun()
+
+
+    # Botão para voltar
+    if st.button("⬅️ Voltar para Lista de Projetos", key="voltar_detalhes_projetos"):
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
+        # Limpa o projeto selecionado e o texto do PDF ao voltar para a lista
+        if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
+        if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
+        for _, session_k_doc in doc_generators.values(): # Limpa documentos gerados
+            if session_k_doc in st.session_state: del session_k_doc
+        st.rerun()
+
+
+# Fluxo Principal da Aplicação (Router)
 def main():
-    if not initialize_firebase():
-        st.stop()
+    """Função principal que controla o fluxo de páginas da aplicação."""
+    if not initialize_firebase_app(): # Tenta inicializar o Firebase para o app
+        st.error("Falha crítica na inicialização do Firebase. A aplicação não pode continuar.")
+        st.stop() # Impede a execução se o Firebase não puder ser inicializado
 
-    if 'autenticado' not in st.session_state:
-        st.session_state.autenticado = False
-    if 'user' not in st.session_state:
-        st.session_state.user = None
-    if 'pagina_atual' not in st.session_state:
-        st.session_state.pagina_atual = 'login'
+    # Inicializa o estado da sessão se as chaves não existirem
+    if AUTENTICADO_SESSION_KEY not in st.session_state:
+        st.session_state[AUTENTICADO_SESSION_KEY] = False
+    if USER_SESSION_KEY not in st.session_state:
+        st.session_state[USER_SESSION_KEY] = None
+    if PAGINA_ATUAL_SESSION_KEY not in st.session_state:
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login' # Começa na página de login
 
-    if not st.session_state.autenticado:
-        pagina_login()
+    # Roteamento de páginas
+    if not st.session_state[AUTENTICADO_SESSION_KEY]:
+        pagina_login() # Se não autenticado, mostra a página de login
     else:
-        if st.session_state.pagina_atual == 'projetos':
+        # Usuário autenticado, navega para a página atual definida no estado da sessão
+        current_page = st.session_state[PAGINA_ATUAL_SESSION_KEY]
+        if current_page == 'projetos':
             pagina_projetos()
-        elif st.session_state.pagina_atual == 'novo_projeto':
+        elif current_page == 'novo_projeto':
             pagina_novo_projeto()
-        elif st.session_state.pagina_atual == 'editar_projeto':
-            pagina_editar_projeto_view()  # Chamada corrigida
-        elif st.session_state.pagina_atual == 'detalhes_projeto':
+        elif current_page == 'editar_projeto':
+            # pagina_editar_projeto() # Chama a função importada
+            pagina_editar_projeto_view() # Usando o alias da importação
+        elif current_page == 'detalhes_projeto':
             pagina_detalhes_projeto()
         else:
-            st.session_state.pagina_atual = 'projetos'
+            # Fallback: se a página atual for desconhecida, volta para a página de projetos
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
             st.rerun()
 
 if __name__ == '__main__':
