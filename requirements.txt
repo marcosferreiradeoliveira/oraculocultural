@@ -1,8 +1,15 @@
 streamlit==1.38.0
+firebase-admin==6.2.0
+google-auth==2.28.1
+google-cloud-firestore==2.15.0
+
+# LangChain e dependências relacionadas
 langchain==0.3.0
 langchain-community==0.3.0
 langchain-groq==0.2.0
 langchain-openai==0.2.0
+
+# Outras dependências
 python-dotenv==1.0.1
 beautifulsoup4==4.12.3
 pypdf==5.0.0
@@ -10,7 +17,3 @@ unstructured==0.15.13
 fake_useragent==1.5.1
 youtube_transcript_api==0.6.2
 PyPDF2>=3.0.0
-streamlit
-firebase-admin
-google-auth
-google-cloud-firestore
