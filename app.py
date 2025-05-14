@@ -119,41 +119,113 @@ def get_user_projects(user_id):
         return []
 
 # Página de Login
+import streamlit as st
+import firebase_admin
+from firebase_admin import auth
+
+import streamlit as st
+import firebase_admin # Assuming firebase_admin is initialized elsewhere if needed by auth
+from firebase_admin import auth
+
 def pagina_login():
-    with st.container():
+    st.markdown(
+        """
+        <style>
+            body {
+                background-color: #f0f2f5; /* Cor de fundo geral da página */
+            }
+            .login-container {
+                background-color: rgba(255, 255, 255, 0.9); /* Fundo branco semi-transparente */
+                padding: 2rem;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                width: 80%; /* Largura do container */
+                max-width: 400px; /* Largura máxima */
+                margin: 100px auto; /* Centralizar vertical e horizontalmente */
+                text-align: center;
+            }
+            .login-container img {
+                width: 150px; /* Ajuste o tamanho do logo */
+                margin-bottom: 1rem;
+            }
+            .login-container h2 {
+                color: #333;
+                margin-bottom: 1.5rem;
+            }
+            .login-container input[type="text"],
+            .login-container input[type="password"] {
+                width: 100%;
+                padding: 0.75rem;
+                margin-bottom: 1rem;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                box-sizing: border-box; /* Para que o padding não aumente a largura */
+            }
+            .login-container button {
+                background-color: #e74c3c; /* Cor do botão (exemplo) */
+                color: white;
+                border: none;
+                padding: 0.75rem 1rem;
+                border-radius: 5px;
+                cursor: pointer;
+                width: 100%;
+            }
+            .login-container button:hover {
+                background-color: #c0392b; /* Cor do botão no hover (exemplo) */
+            }
+            .login-container .forgot-password {
+                margin-top: 0.5rem;
+                font-size: 0.9rem;
+            }
+            .login-container .signup-link {
+                margin-top: 1rem;
+                font-size: 0.9rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.container(): # Outer container for column layout
         col1, col2, col3 = st.columns([1, 3, 1])
-        
-        with col2:
-            st.image("assets/logo_edital_vale.jpg", width=300)
+
+        with col2: # Middle column for the login box
+            # Use st.markdown to create a div with the class "login-container".
+            # This div will be styled by the .login-container CSS rules.
+            # The original st.container(border=True, classes="login-container") is replaced by this approach.
+            st.markdown('<div class="login-container">', unsafe_allow_html=True)
             
-            st.title("Acesso ao Oráculo Cultural")
-            
-            # Formulário de login
+            st.image("assets/logo_edital_vale.jpg", width=150) # Ensure path is correct
+            st.title("Acesso ao Oráculo Cultural") # st.title might be too large, consider st.header or st.subheader
+
             with st.form("login_form"):
                 email = st.text_input("E-mail", placeholder="seu@email.com")
                 password = st.text_input("Senha", type="password", placeholder="••••••••")
-                
                 submitted = st.form_submit_button("Entrar", use_container_width=True)
-                
+
                 if submitted:
                     try:
-                        # Aqui você deve verificar as credenciais com o Firebase Auth
-                        # Este é um exemplo - na prática você precisaria usar Firebase Auth
-                        user = auth.get_user_by_email(email)
-                        
-                        # Atualiza o estado da sessão
-                        st.session_state.update({
-                            'user': {
-                                'email': email,
-                                'uid': user.uid
-                            },
-                            'autenticado': True,
-                            'pagina_atual': 'projetos'  # Define explicitamente para onde ir após login
-                        })
-                        st.rerun()  # Força o rerun para carregar a nova página
-                        
+                        # Ensure Firebase is initialized before calling auth functions
+                        if not firebase_admin._apps:
+                            # This is a fallback, ideally Firebase is initialized once globally
+                            # Consider moving initialize_firebase() call to the top of main() or app startup
+                            st.error("Firebase não inicializado. Por favor, contate o suporte.")
+                        else:
+                            user = auth.get_user_by_email(email)
+                            # Assuming st.session_state is available
+                            st.session_state.update({
+                                'user': {'email': email, 'uid': user.uid},
+                                'autenticado': True,
+                                'pagina_atual': 'projetos'
+                            })
+                            st.rerun()
                     except Exception as e:
-                        st.error(f"Falha no login: {str(e)}")
+                        st.error(f"Falha no login: Verifique seu e-mail e senha. Detalhe: {str(e)}")
+            
+            st.markdown('<p class="forgot-password"><a href="#">Esqueci minha senha</a></p>', unsafe_allow_html=True)
+            st.markdown('<p class="signup-link">Novo por aqui? <a href="#">Cadastre-se</a></p>', unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True) # Close the div.login-container
 # Página de Projetos
 def pagina_projetos():
     st.title(f'Bem-vindo, {st.session_state.user["email"]}!')
