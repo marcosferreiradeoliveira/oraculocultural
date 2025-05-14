@@ -36,26 +36,37 @@ JUSTIFICATIVA_KEY = 'justificativa'
 
 
 # Inicialização do Firebase (deve ser chamada uma vez)
-def initialize_firebase_app():
-    """
-    Inicializa o Firebase Admin SDK para o app principal se não estiver inicializado.
-    Retorna True se sucesso, False caso contrário.
-    """
+def initialize_firebase():
     if not firebase_admin._apps:
         try:
-            cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY_PATH", "config/firebase-service-account.json")
-            if not os.path.exists(cred_path):
-                st.error(f"Arquivo de credenciais do Firebase não encontrado em: {cred_path}. Configure a variável de ambiente FIREBASE_SERVICE_ACCOUNT_KEY_PATH ou coloque o arquivo no caminho padrão.")
-                return False
-            cred = credentials.Certificate(cred_path)
+            # Carrega as credenciais do Secrets
+            firebase_config = st.secrets["firebase_credentials"]
+            
+            # Prepara o dicionário de credenciais
+            cred_dict = {
+                "type": firebase_config["type"],
+                "project_id": firebase_config["project_id"],
+                "private_key_id": firebase_config["private_key_id"],
+                "private_key": firebase_config["private_key"].replace('\\n', '\n'),
+                "client_email": firebase_config["client_email"],
+                "client_id": firebase_config["client_id"],
+                "auth_uri": firebase_config["auth_uri"],
+                "token_uri": firebase_config["token_uri"],
+                "auth_provider_x509_cert_url": firebase_config["auth_provider_x509_cert_url"],
+                "client_x509_cert_url": firebase_config["client_x509_cert_url"],
+                "universe_domain": firebase_config.get("universe_domain", "googleapis.com")
+            }
+            
+            # Inicializa o Firebase
+            cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
-            # st.toast("Firebase inicializado para o app principal.", icon="🚀") # Opcional
-            return True
+            st.success("Conexão com Firebase estabelecida!")
         except Exception as e:
-            st.error(f"Erro crítico ao inicializar Firebase para o app: {str(e)}")
-            return False
-    return True
+            st.error(f"Erro ao conectar ao Firebase: {str(e)}")
+            st.stop()
 
+# Chama a função de inicialização
+initialize_firebase()
 # Carrega variáveis de ambiente do arquivo .env (se existir)
 load_dotenv()
 
