@@ -1,9 +1,16 @@
+# Core
 streamlit==1.38.0
 firebase-admin==6.2.0
+
+# Firebase dependencies
 google-auth==2.28.1
 google-cloud-firestore==2.15.0
 google-api-python-client==2.125.0
-# LangChain e dependências relacionadas
+grpcio==1.62.2
+grpcio-status==1.62.2
+protobuf==3.20.3
+
+# LangChain
 langchain==0.3.0
 langchain-community==0.3.0
 langchain-groq==0.2.0
@@ -14,6 +21,6 @@ python-dotenv==1.0.1
 beautifulsoup4==4.12.3
 pypdf==5.0.0
 unstructured==0.15.13
-fake_useragent==1.5.1
-youtube_transcript_api==0.6.2
-PyPDF2>=3.0.0
+fake-useragent==1.5.1
+youtube-transcript-api==0.6.2
+PyPDF2==3.0.1
