@@ -35,3 +35,4 @@ Thumbs.db
 
 # Streamlit
 .streamlit/config/firebase-service-account.json
+config/firebase-service-account.json
