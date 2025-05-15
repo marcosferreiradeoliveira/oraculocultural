@@ -215,15 +215,34 @@ def pagina_editar_projeto():
             
             # Verificar se já existe documento salvo no Firebase
             documento_salvo = None
-            try:
-                if projeto.get('documentos') and chave in projeto.get('documentos', {}):
+            
+            # Criar um indicador visual para mostrar a estrutura do projeto
+            st.write("Verificando documentos existentes...")
+            
+            # Checar se o campo 'documentos' existe no projeto
+            if 'documentos' in projeto:
+                st.write(f"Campo 'documentos' encontrado no projeto.")
+                
+                # Checar se o documento específico existe
+                if chave in projeto['documentos']:
                     documento_salvo = projeto['documentos'][chave]
-                    if documento_salvo:
-                        st.success(f"📄 {tipo_selecionado} já existente encontrado!")
-                        st.session_state[chave] = documento_salvo
-            except Exception as e:
-                st.error(f"Erro ao verificar documento existente: {str(e)}")
-
+                    st.success(f"📄 {tipo_selecionado} já existente encontrado!")
+                    st.write("Conteúdo do documento encontrado:")
+                    st.write(documento_salvo[:100] + "..." if len(documento_salvo) > 100 else documento_salvo)
+                    st.session_state[chave] = documento_salvo
+                else:
+                    st.info(f"Nenhum documento do tipo '{chave}' encontrado.")
+                    st.write(f"Tipos disponíveis: {', '.join(projeto['documentos'].keys()) if projeto['documentos'] else 'Nenhum'}")
+            else:
+                st.info("Este projeto ainda não possui documentos salvos.")
+                
+            # Verificar a estrutura do projeto para debugging
+            if st.checkbox("Mostrar estrutura do projeto", value=False):
+                st.write("Projeto ID:", projeto.get('id'))
+                st.write("Campos disponíveis:", ", ".join(projeto.keys()))
+                if 'documentos' in projeto:
+                    st.write("Documentos disponíveis:", ", ".join(projeto['documentos'].keys()))
+            
             gerar_botao_label = "Gerar Novo" if documento_salvo else f"Gerar {tipo_selecionado}"
             
             if st.button(gerar_botao_label, key=f"btn_gerar_{chave}"):
