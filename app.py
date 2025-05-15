@@ -157,7 +157,7 @@ def get_user_projects(user_id):
     """Recupera os projetos de um usuário específico do Firestore."""
     try:
         db = firestore.client()
-        projetos_ref = db.collection('projetos').where('user_id', '==', user_id).order_by('data_criacao', direction=firestore.Query.DESCENDING)
+        projetos_ref = db.collection('projetos').where(filter=FieldFilter('user_id', '==', user_id))
         projetos_stream = projetos_ref.stream() # Renomeado para evitar conflito com a lista
         projetos_lista = [{'id': doc.id, **doc.to_dict()} for doc in projetos_stream]
         return projetos_lista

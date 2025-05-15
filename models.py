@@ -1,152 +1,168 @@
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-from langchain.chains import LLMChain
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 import streamlit as st
 
-# Configuração centralizada do LLM com cache e usando secrets
+# Configuração otimizada do LLM com cache
 @st.cache_resource
 def get_llm(model="gpt-4-turbo", temperature=0.7, max_tokens=2000):
-    """Retorna uma instância configurada e em cache do LLM"""
+    """Retorna uma instância configurada do LLM com cache"""
     return ChatOpenAI(
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
-        openai_api_key=st.secrets["openai"]["api_key"]  # Acesso seguro à chave
+        openai_api_key=st.secrets["openai"]["api_key"],
+        streaming=True  # Habilita streaming para respostas longas
     )
 
-# Função base para criar chains com tratamento de texto
+# Função base para criação de chains
 def _create_chain(prompt_template, llm=None, diagnostico=None):
-    """Cria chain com tratamento consistente de input"""
-    if not llm:
-        llm = get_llm()
+    """Factory method para criar chains padronizadas"""
+    llm = llm or get_llm()
     
-    instrucoes = f"\nConsidere o seguinte diagnóstico:\n{diagnostico}\n" if diagnostico else ""
-    full_template = instrucoes + prompt_template
+    # Tratamento condicional do diagnóstico
+    if diagnostico:
+        prompt_template = f"CONTEXTO ADICIONAL:\n{diagnostico}\n\n{prompt_template}"
     
-    prompt = ChatPromptTemplate.from_template(full_template)
-    return LLMChain(llm=llm, prompt=prompt, output_parser=StrOutputParser())
+    prompt = ChatPromptTemplate.from_template(prompt_template)
+    
+    return (
+        RunnablePassthrough()
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
 
 def gerar_resumo_projeto(texto_projeto, diagnostico=None, llm=None):
-    """Gera resumo conciso do projeto (150-200 palavras)"""
-    prompt_template = """
-    Gere um resumo profissional do seguinte projeto, destacando:
-    - Objetivos principais
-    - Público-alvo
-    - Metodologia
-    - Impacto cultural
+    """Gera resumo executivo do projeto cultural"""
+    template = """
+    Gere um resumo profissional (150-200 palavras) com:
+    - Objetivos claros
+    - Público-alvo definido
+    - Metodologia concisa
+    - Impacto cultural esperado
     
-    Use linguagem clara e objetiva.
+    PROJETO:
+    {texto}
     
-    Projeto: {texto}"""
+    FORMATE EM MARKDOWN COM SEÇÕES CLARAS"""
     
-    chain = _create_chain(prompt_template, llm, diagnostico)
-    return chain.run({"texto": texto_projeto[:10000]})  # Limita o tamanho do texto
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})  # Limite seguro de tokens
 
 def gerar_orcamento(texto_projeto, diagnostico=None, llm=None):
-    """Gera orçamento detalhado dividido em categorias"""
-    prompt_template = """
-    Gere um orçamento detalhado para o projeto abaixo, incluindo:
-    - Materiais e suprimentos (itens e valores)
-    - Honorários profissionais (funções e valores)
-    - Infraestrutura e logística (itens e valores)
-    - Outras despesas relevantes
-    - Total estimado com valores consolidados
+    """Gera orçamento detalhado em formato tabular"""
+    template = """
+    Gere um orçamento detalhado com:
+    1. MATERIAIS (itens, quantidades, valores unitários e totais)
+    2. PESSOAL (funções, carga horária, valores/hora e totais)
+    3. INFRAESTRUTURA (itens, períodos, valores)
+    4. OUTRAS DESPESAS (descrição e valores)
+    5. TOTAL GERAL consolidado
     
-    Projeto: {texto}"""
+    FORMATE COMO TABELA MARKDOWN
     
-    chain = _create_chain(prompt_template, llm, diagnostico)
-    return chain.run({"texto": texto_projeto[:10000]})
+    PROJETO:
+    {texto}"""
+    
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
 
 def gerar_cronograma(texto_projeto, diagnostico=None, llm=None):
-    """Gera cronograma com fases e prazos estimados"""
-    prompt_template = """
-    Crie um cronograma detalhado com base nas fases:
-    1. Planejamento (atividades e duração)
-    2. Execução (etapas e marcos temporais)
-    3. Finalização (entregas finais)
-    4. Avaliação (métodos e período)
+    """Gera cronograma com marcos temporais"""
+    template = """
+    Crie um cronograma com:
+    - FASES PRINCIPAIS (planejamento, execução, finalização)
+    - ATIVIDADES por fase
+    - PRAZOS ESTIMADOS (datas ou durações)
+    - RESPONSÁVEIS
     
-    Indique prazos realistas para cada etapa.
+    USE FORMATO DE LISTA MARKDOWN COM DATAS
     
-    Projeto: {texto}"""
+    PROJETO:
+    {texto}"""
     
-    chain = _create_chain(prompt_template, llm, diagnostico)
-    return chain.run({"texto": texto_projeto[:10000]})
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
 
 def gerar_objetivos(texto_projeto, diagnostico=None, llm=None):
-    """Reformula objetivos no formato SMART"""
-    prompt_template = """
-    Reformule os objetivos do projeto no formato SMART:
-    - Específicos (claros e bem definidos)
-    - Mensuráveis (com indicadores quantificáveis)
-    - Atingíveis (realistas com os recursos)
-    - Relevantes (alinhados ao propósito)
-    - Temporais (com prazos definidos)
+    """Formula objetivos no padrão SMART"""
+    template = """
+    Reformule os objetivos como SMART:
+    [ESPECÍFICO] - O quê exatamente será feito?
+    [MENSURÁVEL] - Como medir o sucesso?
+    [ATINGÍVEL] - É realista com os recursos?
+    [RELEVANTE] - Alinhamento com metas maiores?
+    [TEMPORAL] - Qual o prazo final?
     
-    Projeto: {texto}"""
+    NUMERE E FORMATE CLARAMENTE
     
-    chain = _create_chain(prompt_template, llm, diagnostico)
-    return chain.run({"texto": texto_projeto[:10000]})
+    PROJETO:
+    {texto}"""
+    
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
 
 def gerar_justificativa(texto_projeto, diagnostico=None, llm=None):
-    """Gera justificativa técnica convincente"""
-    prompt_template = """
-    Elabore uma justificativa técnica que inclua:
-    1. Contexto e motivações do projeto
-    2. Contribuições culturais esperadas
-    3. Relevância social e técnica
-    4. Benefícios para o público-alvo
-    5. Alinhamento com políticas culturais
+    """Elabora justificativa técnica"""
+    template = """
+    Desenvolva uma justificativa com:
+    1. CONTEXTO CULTURAL (por que é importante?)
+    2. INOVAÇÃO (o que traz de novo?)
+    3. IMPACTO SOCIAL (benefícios para quem?)
+    4. VIABILIDADE (por que pode dar certo?)
     
-    Projeto: {texto}"""
+    USE PARÁGRAFOS COESOS E ARGUMENTATIVOS
     
-    chain = _create_chain(prompt_template, llm, diagnostico)
-    return chain.run({"texto": texto_projeto[:10000]})
+    PROJETO:
+    {texto}"""
+    
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
 
 def gerar_etapas_trabalho(texto_projeto, diagnostico=None, llm=None):
-    """Detalha etapas do projeto"""
-    prompt_template = """
-    Descreva detalhadamente as etapas de trabalho:
-    [Planejamento]
-    - Atividades específicas
+    """Detalha etapas de execução"""
+    template = """
+    Descreva as etapas com:
+    [PLANEJAMENTO]
+    - Tarefas específicas
     - Responsáveis
-    - Recursos necessários
+    - Pré-requisitos
     
-    [Execução]
-    - Fases operacionais
-    - Marcos importantes
-    - Métodos de acompanhamento
+    [EXECUÇÃO]
+    - Fluxo operacional
+    - Marcos críticos
+    - Indicadores de progresso
     
-    [Monitoramento]
-    - Indicadores de desempenho
-    - Ferramentas de avaliação
+    [AVALIAÇÃO]
+    - Métricas de sucesso
+    - Ferramentas de análise
     
-    [Encerramento]
-    - Entregas finais
-    - Relatórios obrigatórios
+    FORMATE COM LISTAS HIERARQUICAS
     
-    Projeto: {texto}"""
+    PROJETO:
+    {texto}"""
     
-    chain = _create_chain(prompt_template, llm, diagnostico)
-    return chain.run({"texto": texto_projeto[:10000]})
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
 
 def gerar_ficha_tecnica(texto_projeto, diagnostico=None, llm=None):
-    """Gera ficha técnica completa"""
-    prompt_template = """
-    Crie uma ficha técnica profissional contendo:
-    [Equipe]
-    - Funções/chave
-    - Responsabilidades específicas
-    - Qualificações requeridas
-    - Tipo de vínculo (CLT, PJ, voluntário)
+    """Produz ficha técnica completa"""
+    template = """
+    Crie uma ficha técnica contendo:
+    [EQUIPE]
+    - Função | Responsabilidades | Qualificações | Vínculo
     
-    [Recursos]
-    - Equipamentos necessários
-    - Espaços físicos requeridos
-    - Materiais de consumo
+    [RECURSOS]
+    - Equipamentos | Especificações | Quantidade
+    - Espaços | Requisitos | Período
+    - Materiais | Tipos | Quantidades
     
-    Projeto: {texto}"""
+    FORMATE COMO TABELAS MARKDOWN
     
-    chain = _create_chain(prompt_template, llm, diagnostico)
-    return chain.run({"texto": texto_projeto[:10000]})
+    PROJETO:
+    {texto}"""
+    
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
