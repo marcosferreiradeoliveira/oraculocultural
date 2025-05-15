@@ -212,8 +212,21 @@ def pagina_editar_projeto():
 
             tipo_selecionado = st.selectbox("Selecione o tipo de documento:", list(tipos.keys()), key="sel_tipo_documento")
             chave = tipos[tipo_selecionado]
+            
+            # Verificar se já existe documento salvo no Firebase
+            documento_salvo = None
+            try:
+                if projeto.get('documentos') and chave in projeto.get('documentos', {}):
+                    documento_salvo = projeto['documentos'][chave]
+                    if documento_salvo:
+                        st.success(f"📄 {tipo_selecionado} já existente encontrado!")
+                        st.session_state[chave] = documento_salvo
+            except Exception as e:
+                st.error(f"Erro ao verificar documento existente: {str(e)}")
 
-            if st.button(f"Gerar {tipo_selecionado}", key=f"btn_gerar_{chave}"):
+            gerar_botao_label = "Gerar Novo" if documento_salvo else f"Gerar {tipo_selecionado}"
+            
+            if st.button(gerar_botao_label, key=f"btn_gerar_{chave}"):
                 with st.spinner(f"Gerando {tipo_selecionado}..."):
                     try:
                         llm = get_llm()
