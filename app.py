@@ -6,6 +6,7 @@ import streamlit as st
 from dotenv import load_dotenv # Para carregar variáveis de .env
 import firebase_admin
 from firebase_admin import credentials, firestore # auth será usado em login.py
+from google.cloud.firestore_v1 import FieldFilter
 
 st.set_page_config(
     page_title="Oráculo Cultural",
