@@ -29,25 +29,17 @@ def pagina_editar_projeto():
     # CSS para controlar a exibição do sidebar
     st.markdown("""
     <style>
-        /* Garante que a sidebar esteja sempre visível */
         section[data-testid="stSidebar"] {
             min-width: 250px !important;
             width: 250px !important;
-            display: flex !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            transform: none !important;
         }
-
-        /* Esconde o botão de recolher */
         [data-testid="collapsedControl"] {
             display: none !important;
         }
     </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-
-    # Inicializa o Firestore se ainda não estiver inicializado
+    # Inicializa o Firestore
     try:
         if not firebase_admin._apps:
             cred = credentials.Certificate("config/firebase-service-account.json")
@@ -85,14 +77,13 @@ def pagina_editar_projeto():
     # Título da página
     st.title(f"✏️ Editando: {projeto.get('nome', 'Projeto sem nome')}")
 
-   # Seção 1: Carregar Projeto
+    # Seção 1: Carregar Projeto
     if seção == "📥 Carregar Projeto":
         st.header("Carregar Conteúdo do Projeto")
 
         texto_existente = projeto.get('texto_projeto', '')
         texto_input = texto_existente 
-        texto_limpo = re.sub(r'\n+', '\n\n', texto_input.strip())  # Normaliza várias quebras seguidas
- # Inicialmente mostra o que já existe
+        texto_limpo = re.sub(r'\n+', '\n\n', texto_input.strip())
 
         if texto_existente:
             st.success("📄 Conteúdo do projeto já existente carregado.")
@@ -130,7 +121,6 @@ def pagina_editar_projeto():
             else:
                 st.warning("Por favor, forneça um conteúdo antes de salvar.")
 
-
     # Seção 2: Fazer Diagnóstico
     elif seção == "🔍 Fazer Diagnóstico":
         st.header("Diagnóstico do Projeto")
@@ -162,25 +152,6 @@ def pagina_editar_projeto():
                         except Exception as e:
                             st.error(f"Erro ao gerar diagnóstico: {str(e)}")
 
-            # with col2:
-            #     st.subheader("Diagnóstico Manual")
-            #     anotacoes = st.text_area(
-            #         "Anotações e observações",
-            #         value=projeto.get('anotacoes', ''),
-            #         height=200,
-            #         key="anotacoes_diagnostico"
-            #     )
-
-            #     if st.button("Salvar Anotações", key="btn_salvar_anotacoes"):
-            #         try:
-            #             db.collection('projetos').document(projeto['id']).update({
-            #                 'anotacoes': anotacoes,
-            #                 'ultima_atualizacao': firestore.SERVER_TIMESTAMP
-            #             })
-            #             st.success("Anotações salvas no projeto!")
-            #         except Exception as e:
-            #             st.error(f"Erro ao salvar anotações: {str(e)}")
-
             st.divider()
             st.subheader("📋 Resultado do Diagnóstico")
 
@@ -200,94 +171,97 @@ def pagina_editar_projeto():
             texto = st.session_state.get('texto_projeto', projeto.get('texto_projeto', ''))
             diagnostico = projeto.get('diagnostico_texto', '')
 
-            tipos = {
-                "Resumo Executivo": "resumo_executivo",
-                "Cronograma Detalhado": "cronograma_detalhado",
-                "Orçamento Completo": "orcamento_completo",
-                "Justificativa Técnica": "justificativa_tecnica",
-                "Objetivos SMART": "objetivos_smart",
-                "Etapas de Trabalho": "etapas_trabalho",
-                "Ficha Técnica": "ficha_tecnica"
+            # Mapeamento de tipos de documentos
+            tipos_documentos = {
+                "Resumo Executivo": ("resumo_executivo", gerar_resumo_projeto),
+                "Cronograma Detalhado": ("cronograma_detalhado", gerar_cronograma),
+                "Orçamento Completo": ("orcamento_completo", gerar_orcamento),
+                "Justificativa Técnica": ("justificativa_tecnica", gerar_justificativa),
+                "Objetivos SMART": ("objetivos_smart", gerar_objetivos),
+                "Etapas de Trabalho": ("etapas_trabalho", gerar_etapas_trabalho),
+                "Ficha Técnica": ("ficha_tecnica", gerar_ficha_tecnica)
             }
 
-            tipo_selecionado = st.selectbox("Selecione o tipo de documento:", list(tipos.keys()), key="sel_tipo_documento")
-            chave = tipos[tipo_selecionado]
+            # Seleção do tipo de documento
+            tipo_selecionado = st.selectbox(
+                "Selecione o tipo de documento:", 
+                list(tipos_documentos.keys()), 
+                key="sel_tipo_documento"
+            )
             
-            # Verificar se já existe documento salvo no Firebase
-            documento_salvo = None
+            # Obter chave e função correspondente
+            chave, funcao_geradora = tipos_documentos[tipo_selecionado]
             
-            # Criar um indicador visual para mostrar a estrutura do projeto
-            st.write("Verificando documentos existentes...")
+            # Verificar se já existe documento no Firebase
+            doc_ref = db.collection('projetos').document(projeto['id'])
+            doc_snapshot = doc_ref.get()
             
-            # Checar se o campo 'documentos' existe no projeto
-            if 'documentos' in projeto:
-                st.write(f"Campo 'documentos' encontrado no projeto.")
+            documento_existente = None
+            if doc_snapshot.exists:
+                projeto_data = doc_snapshot.to_dict()
+                if 'documentos' in projeto_data and chave in projeto_data['documentos']:
+                    documento_existente = projeto_data['documentos'][chave]
+                    st.success(f"✅ Documento '{tipo_selecionado}' encontrado no banco de dados!")
+            
+            # Exibir documento existente ou opção para gerar novo
+            if documento_existente:
+                st.subheader(f"📄 {tipo_selecionado} Existente")
+                st.text_area("Conteúdo do documento", 
+                           value=documento_existente, 
+                           height=300,
+                           key=f"view_{chave}")
                 
-                # Checar se o documento específico existe
-                if chave in projeto['documentos']:
-                    documento_salvo = projeto['documentos'][chave]
-                    st.success(f"📄 {tipo_selecionado} já existente encontrado!")
-                    st.write("Conteúdo do documento encontrado:")
-                    st.write(documento_salvo[:100] + "..." if len(documento_salvo) > 100 else documento_salvo)
-                    st.session_state[chave] = documento_salvo
-                else:
-                    st.info(f"Nenhum documento do tipo '{chave}' encontrado.")
-                    st.write(f"Tipos disponíveis: {', '.join(projeto['documentos'].keys()) if projeto['documentos'] else 'Nenhum'}")
-            else:
-                st.info("Este projeto ainda não possui documentos salvos.")
-                
-            # Verificar a estrutura do projeto para debugging
-            if st.checkbox("Mostrar estrutura do projeto", value=False):
-                st.write("Projeto ID:", projeto.get('id'))
-                st.write("Campos disponíveis:", ", ".join(projeto.keys()))
-                if 'documentos' in projeto:
-                    st.write("Documentos disponíveis:", ", ".join(projeto['documentos'].keys()))
-            
-            gerar_botao_label = "Gerar Novo" if documento_salvo else f"Gerar {tipo_selecionado}"
-            
-            if st.button(gerar_botao_label, key=f"btn_gerar_{chave}"):
-                with st.spinner(f"Gerando {tipo_selecionado}..."):
-                    try:
-                        llm = get_llm()
-                        func_map = {
-                            "resumo_executivo": gerar_resumo_projeto,
-                            "cronograma_detalhado": gerar_cronograma,
-                            "orcamento_completo": gerar_orcamento,
-                            "justificativa_tecnica": gerar_justificativa,
-                            "objetivos_smart": gerar_objetivos,
-                            "etapas_trabalho": gerar_etapas_trabalho,
-                            "ficha_tecnica": gerar_ficha_tecnica
-                        }
-
-                        documento = func_map[chave](texto, context=diagnostico, llm=llm)
-                        st.session_state[chave] = documento
-                        st.success(f"{tipo_selecionado} gerado com sucesso!")
-                    except Exception as e:
-                        st.error(f"Erro ao gerar documento: {str(e)}")
-
-            if chave in st.session_state:
-                st.divider()
-                st.subheader(f"📝 {tipo_selecionado}")
-                st.text_area("Conteúdo gerado", st.session_state[chave], height=300, key=f"area_{chave}")
-
+                # Opções para o documento existente
                 col1, col2 = st.columns(2)
                 with col1:
                     st.download_button(
                         label="⏬ Baixar Documento",
-                        data=st.session_state[chave],
+                        data=documento_existente,
                         file_name=f"{chave}.txt",
                         mime="text/plain",
-                        key=f"btn_download_{chave}"
+                        key=f"dl_{chave}"
                     )
                 with col2:
-                    if st.button("Salvar no Projeto", key=f"btn_salvar_{chave}"):
+                    if st.button("🔄 Gerar Nova Versão", key=f"new_{chave}"):
+                        with st.spinner(f"Gerando novo {tipo_selecionado}..."):
+                            try:
+                                novo_documento = funcao_geradora(texto, context=diagnostico, llm=llm)
+                                st.session_state[chave] = novo_documento
+                                st.success("Novo documento gerado com sucesso!")
+                            except Exception as e:
+                                st.error(f"Erro ao gerar documento: {str(e)}")
+            else:
+                st.info(f"Nenhum documento '{tipo_selecionado}' encontrado no projeto.")
+                
+                if st.button(f"✨ Gerar {tipo_selecionado}", key=f"gen_{chave}"):
+                    with st.spinner(f"Gerando {tipo_selecionado}..."):
                         try:
-                            db.collection('projetos').document(projeto['id']).update({
-                                f'documentos.{chave}': st.session_state[chave],
-                                'ultima_atualizacao': firestore.SERVER_TIMESTAMP
-                            })
-                            st.success("Documento salvo no projeto!")
+                            novo_documento = funcao_geradora(texto, context=diagnostico, llm=llm)
+                            st.session_state[chave] = novo_documento
+                            st.success("Documento gerado com sucesso!")
                         except Exception as e:
-                            st.error(f"Erro ao salvar documento: {str(e)}")
+                            st.error(f"Erro ao gerar documento: {str(e)}")
+
+            # Se há um documento novo na sessão (gerado ou carregado)
+            if chave in st.session_state:
+                st.subheader(f"📝 Visualização do {tipo_selecionado}")
+                st.text_area("Conteúdo do documento", 
+                           value=st.session_state[chave], 
+                           height=300,
+                           key=f"edit_{chave}")
+                
+                # Opções para salvar o novo documento
+                if st.button("💾 Salvar no Projeto", key=f"save_{chave}"):
+                    try:
+                        # Atualiza o documento específico mantendo outros existentes
+                        update_data = {
+                            f'documentos.{chave}': st.session_state[chave],
+                            'ultima_atualizacao': firestore.SERVER_TIMESTAMP
+                        }
+                        
+                        doc_ref.update(update_data)
+                        st.success("Documento salvo com sucesso no projeto!")
+                    except Exception as e:
+                        st.error(f"Erro ao salvar documento: {str(e)}")
 
 
