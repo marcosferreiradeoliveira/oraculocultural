@@ -227,7 +227,7 @@ def pagina_editar_projeto():
                             "ficha_tecnica": gerar_ficha_tecnica
                         }
 
-                        documento = func_map[chave](llm, texto, diagnostico)
+                        documento = func_map[chave](texto, diagnostico, llm)
                         st.session_state[chave] = documento
                         st.success(f"{tipo_selecionado} gerado com sucesso!")
                     except Exception as e:
