@@ -60,6 +60,24 @@ def _create_chain(
         | StrOutputParser()              # Converte para string
     )
 
+def gerar_objetivos(texto_projeto, diagnostico=None, llm=None):
+    """Formula objetivos no padrão SMART"""
+    template = """
+    Reformule os objetivos como SMART:
+    [ESPECÍFICO] - O quê exatamente será feito?
+    [MENSURÁVEL] - Como medir o sucesso?
+    [ATINGÍVEL] - É realista com os recursos?
+    [RELEVANTE] - Alinhamento com metas maiores?
+    [TEMPORAL] - Qual o prazo final?
+
+    NUMERE E FORMATE CLARAMENTE
+
+    PROJETO:
+    {texto}"""
+
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
+
 def gerar_resumo_projeto(
     texto_projeto: str,
     context: Optional[str] = None,
@@ -101,6 +119,23 @@ def gerar_resumo_projeto(
     except Exception as e:
         st.error(f"Falha ao gerar resumo: {str(e)}")
         return ""
+
+def gerar_justificativa(texto_projeto, diagnostico=None, llm=None):
+    """Elabora justificativa técnica"""
+    template = """
+    Desenvolva uma justificativa com:
+    1. CONTEXTO CULTURAL (por que é importante?)
+    2. INOVAÇÃO (o que traz de novo?)
+    3. IMPACTO SOCIAL (benefícios para quem?)
+    4. VIABILIDADE (por que pode dar certo?)
+    
+    USE PARÁGRAFOS COESOS E ARGUMENTATIVOS
+    
+    PROJETO:
+    {texto}"""
+    
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
 
 def gerar_orcamento(
     texto_projeto: str,
@@ -177,20 +212,3 @@ def gerar_documento_completo(
         # Adicione outros documentos conforme necessário
     }
 
-def gerar_objetivos(texto_projeto, diagnostico=None, llm=None):
-    """Formula objetivos no padrão SMART"""
-    template = """
-    Reformule os objetivos como SMART:
-    [ESPECÍFICO] - O quê exatamente será feito?
-    [MENSURÁVEL] - Como medir o sucesso?
-    [ATINGÍVEL] - É realista com os recursos?
-    [RELEVANTE] - Alinhamento com metas maiores?
-    [TEMPORAL] - Qual o prazo final?
-
-    NUMERE E FORMATE CLARAMENTE
-
-    PROJETO:
-    {texto}"""
-
-    chain = _create_chain(template, llm, diagnostico)
-    return chain.invoke({"texto": texto_projeto[:15000]})
