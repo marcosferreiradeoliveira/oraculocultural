@@ -60,6 +60,52 @@ def _create_chain(
         | StrOutputParser()              # Converte para string
     )
 
+def gerar_ficha_tecnica(texto_projeto, diagnostico=None, llm=None):
+    """Produz ficha técnica completa"""
+    template = """
+    Crie uma ficha técnica contendo:
+    [EQUIPE]
+    - Função | Responsabilidades | Qualificações | Vínculo
+    
+    [RECURSOS]
+    - Equipamentos | Especificações | Quantidade
+    - Espaços | Requisitos | Período
+    - Materiais | Tipos | Quantidades
+    
+    FORMATE COMO TABELAS MARKDOWN
+    
+    PROJETO:
+    {texto}"""
+    
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
+
+def gerar_etapas_trabalho(texto_projeto, diagnostico=None, llm=None):
+    """Detalha etapas de execução"""
+    template = """
+    Descreva as etapas com:
+    [PLANEJAMENTO]
+    - Tarefas específicas
+    - Responsáveis
+    - Pré-requisitos
+    
+    [EXECUÇÃO]
+    - Fluxo operacional
+    - Marcos críticos
+    - Indicadores de progresso
+    
+    [AVALIAÇÃO]
+    - Métricas de sucesso
+    - Ferramentas de análise
+    
+    FORMATE COM LISTAS HIERARQUICAS
+    
+    PROJETO:
+    {texto}"""
+    
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
+
 def gerar_objetivos(texto_projeto, diagnostico=None, llm=None):
     """Formula objetivos no padrão SMART"""
     template = """
