@@ -30,34 +30,39 @@ def get_llm(
         streaming=True
     )
 
+# models.py - _create_chain com depuração
 def _create_chain(
     prompt_template: str,
     llm: Optional[ChatOpenAI] = None,
     context: Optional[str] = None
 ):
-    """Cria uma chain de processamento de texto completa.
-    
-    Args:
-        prompt_template: Template do prompt com {texto} como placeholder
-        llm: Modelo de linguagem (opcional)
-        context: Contexto adicional para o prompt (opcional)
-        
-    Returns:
-        Chain pronta para invocação
-    """
-    llm = llm or get_llm()
-    
-    # Adiciona contexto se fornecido
+    llm_to_use = llm or get_llm() # Renomeado para clareza na depuração
+
     if context:
-        prompt_template = f"CONTEXTO:\n{context}\n\n{prompt_template}"
-    
-    prompt = ChatPromptTemplate.from_template(prompt_template)
-    
+        prompt_template_str = f"CONTEXTO:\n{context}\n\n{prompt_template}" # Renomeado
+    else:
+        prompt_template_str = prompt_template
+
+    prompt_object = ChatPromptTemplate.from_template(prompt_template_str) # Renomeado
+
+    # --------------- DEBUGGING PRINTS ---------------
+    print(f"DEBUG models.py: Tipo de llm_to_use: {type(llm_to_use)}")
+    print(f"DEBUG models.py: Tipo de prompt_object: {type(prompt_object)}")
+
+    # Verifique os componentes da cadeia individualmente
+    runnable_map = {"texto": RunnablePassthrough()}
+    parser = StrOutputParser()
+
+    print(f"DEBUG models.py: Tipo de runnable_map: {type(runnable_map)}")
+    print(f"DEBUG models.py: Tipo de RunnablePassthrough() dentro do mapa: {type(RunnablePassthrough())}")
+    print(f"DEBUG models.py: Tipo de parser: {type(parser)}")
+    # --------------- FIM DEBUGGING PRINTS ---------------
+
     return (
-        {"texto": RunnablePassthrough()}  # Recebe o texto de input
-        | prompt                          # Aplica o template
-        | llm                            # Processa com o LLM
-        | StrOutputParser()              # Converte para string
+        runnable_map
+        | prompt_object
+        | llm_to_use
+        | parser
     )
 
 def gerar_resumo_projeto(
