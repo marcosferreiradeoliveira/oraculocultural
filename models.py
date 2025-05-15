@@ -34,7 +34,7 @@ def _create_chain(
     prompt_template: str,
     llm: Optional[ChatOpenAI] = None,
     context: Optional[str] = None
-) -> RunnablePassthrough:
+):
     """Cria uma chain de processamento de texto completa.
     
     Args:
@@ -59,70 +59,6 @@ def _create_chain(
         | llm                            # Processa com o LLM
         | StrOutputParser()              # Converte para string
     )
-
-def gerar_ficha_tecnica(texto_projeto, diagnostico=None, llm=None):
-    """Produz ficha técnica completa"""
-    template = """
-    Crie uma ficha técnica contendo:
-    [EQUIPE]
-    - Função | Responsabilidades | Qualificações | Vínculo
-    
-    [RECURSOS]
-    - Equipamentos | Especificações | Quantidade
-    - Espaços | Requisitos | Período
-    - Materiais | Tipos | Quantidades
-    
-    FORMATE COMO TABELAS MARKDOWN
-    
-    PROJETO:
-    {texto}"""
-    
-    chain = _create_chain(template, llm, diagnostico)
-    return chain.invoke({"texto": texto_projeto[:15000]})
-
-def gerar_etapas_trabalho(texto_projeto, diagnostico=None, llm=None):
-    """Detalha etapas de execução"""
-    template = """
-    Descreva as etapas com:
-    [PLANEJAMENTO]
-    - Tarefas específicas
-    - Responsáveis
-    - Pré-requisitos
-    
-    [EXECUÇÃO]
-    - Fluxo operacional
-    - Marcos críticos
-    - Indicadores de progresso
-    
-    [AVALIAÇÃO]
-    - Métricas de sucesso
-    - Ferramentas de análise
-    
-    FORMATE COM LISTAS HIERARQUICAS
-    
-    PROJETO:
-    {texto}"""
-    
-    chain = _create_chain(template, llm, diagnostico)
-    return chain.invoke({"texto": texto_projeto[:15000]})
-
-def gerar_objetivos(texto_projeto, diagnostico=None, llm=None):
-    """Formula objetivos no padrão SMART"""
-    template = """
-    Reformule os objetivos como SMART:
-    [ESPECÍFICO] - O quê exatamente será feito?
-    [MENSURÁVEL] - Como medir o sucesso?
-    [ATINGÍVEL] - É realista com os recursos?
-    [RELEVANTE] - Alinhamento com metas maiores?
-    [TEMPORAL] - Qual o prazo final?
-
-    NUMERE E FORMATE CLARAMENTE
-
-    PROJETO:
-    {texto}"""
-
-    chain = _create_chain(template, llm, diagnostico)
-    return chain.invoke({"texto": texto_projeto[:15000]})
 
 def gerar_resumo_projeto(
     texto_projeto: str,
@@ -165,23 +101,6 @@ def gerar_resumo_projeto(
     except Exception as e:
         st.error(f"Falha ao gerar resumo: {str(e)}")
         return ""
-
-def gerar_justificativa(texto_projeto, diagnostico=None, llm=None):
-    """Elabora justificativa técnica"""
-    template = """
-    Desenvolva uma justificativa com:
-    1. CONTEXTO CULTURAL (por que é importante?)
-    2. INOVAÇÃO (o que traz de novo?)
-    3. IMPACTO SOCIAL (benefícios para quem?)
-    4. VIABILIDADE (por que pode dar certo?)
-    
-    USE PARÁGRAFOS COESOS E ARGUMENTATIVOS
-    
-    PROJETO:
-    {texto}"""
-    
-    chain = _create_chain(template, llm, diagnostico)
-    return chain.invoke({"texto": texto_projeto[:15000]})
 
 def gerar_orcamento(
     texto_projeto: str,
@@ -239,7 +158,118 @@ def gerar_cronograma(
         st.error(f"Falha ao gerar cronograma: {str(e)}")
         return ""
 
-# [Adicione aqui as outras funções com a mesma estrutura...]
+def gerar_objetivos(
+    texto_projeto: str,
+    context: Optional[str] = None,
+    llm: Optional[ChatOpenAI] = None
+) -> str:
+    """Formula objetivos no padrão SMART."""
+    template = """
+    Reformule os objetivos como SMART:
+    [ESPECÍFICO] - O quê exatamente será feito?
+    [MENSURÁVEL] - Como medir o sucesso?
+    [ATINGÍVEL] - É realista com os recursos?
+    [RELEVANTE] - Alinhamento com metas maiores?
+    [TEMPORAL] - Qual o prazo final?
+    
+    NUMERE E FORMATE CLARAMENTE
+    
+    PROJETO:
+    {texto}"""
+    
+    try:
+        chain = _create_chain(template, llm, context)
+        return chain.invoke(texto_projeto[:15000])
+    except Exception as e:
+        st.error(f"Falha ao gerar objetivos: {str(e)}")
+        return ""
+
+def gerar_justificativa(
+    texto_projeto: str,
+    context: Optional[str] = None,
+    llm: Optional[ChatOpenAI] = None
+) -> str:
+    """Elabora justificativa técnica."""
+    template = """
+    Desenvolva uma justificativa com:
+    1. CONTEXTO CULTURAL (por que é importante?)
+    2. INOVAÇÃO (o que traz de novo?)
+    3. IMPACTO SOCIAL (benefícios para quem?)
+    4. VIABILIDADE (por que pode dar certo?)
+    
+    USE PARÁGRAFOS COESOS E ARGUMENTATIVOS
+    
+    PROJETO:
+    {texto}"""
+    
+    try:
+        chain = _create_chain(template, llm, context)
+        return chain.invoke(texto_projeto[:15000])
+    except Exception as e:
+        st.error(f"Falha ao gerar justificativa: {str(e)}")
+        return ""
+
+def gerar_etapas_trabalho(
+    texto_projeto: str,
+    context: Optional[str] = None,
+    llm: Optional[ChatOpenAI] = None
+) -> str:
+    """Detalha etapas de execução."""
+    template = """
+    Descreva as etapas com:
+    [PLANEJAMENTO]
+    - Tarefas específicas
+    - Responsáveis
+    - Pré-requisitos
+    
+    [EXECUÇÃO]
+    - Fluxo operacional
+    - Marcos críticos
+    - Indicadores de progresso
+    
+    [AVALIAÇÃO]
+    - Métricas de sucesso
+    - Ferramentas de análise
+    
+    FORMATE COM LISTAS HIERARQUICAS
+    
+    PROJETO:
+    {texto}"""
+    
+    try:
+        chain = _create_chain(template, llm, context)
+        return chain.invoke(texto_projeto[:15000])
+    except Exception as e:
+        st.error(f"Falha ao gerar etapas: {str(e)}")
+        return ""
+
+def gerar_ficha_tecnica(
+    texto_projeto: str,
+    context: Optional[str] = None,
+    llm: Optional[ChatOpenAI] = None
+) -> str:
+    """Produz ficha técnica completa."""
+    template = """
+    Crie uma ficha técnica contendo:
+    [EQUIPE]
+    - Função | Responsabilidades | Qualificações | Vínculo
+    
+    [RECURSOS]
+    - Equipamentos | Especificações | Quantidade
+    - Espaços | Requisitos | Período
+    - Materiais | Tipos | Quantidades
+    
+    FORMATE COMO TABELAS MARKDOWN
+    
+    PROJETO:
+    {texto}"""
+    
+    try:
+        chain = _create_chain(template, llm, context)
+        return chain.invoke(texto_projeto[:15000])
+    except Exception as e:
+        st.error(f"Falha ao gerar ficha técnica: {str(e)}")
+        return ""
 
 def gerar_documento_completo(
     texto_projeto: str,
@@ -255,6 +285,8 @@ def gerar_documento_completo(
         "resumo": gerar_resumo_projeto(texto_projeto, context, llm),
         "orcamento": gerar_orcamento(texto_projeto, context, llm),
         "cronograma": gerar_cronograma(texto_projeto, context, llm),
-        # Adicione outros documentos conforme necessário
+        "objetivos": gerar_objetivos(texto_projeto, context, llm),
+        "justificativa": gerar_justificativa(texto_projeto, context, llm),
+        "etapas": gerar_etapas_trabalho(texto_projeto, context, llm),
+        "ficha_tecnica": gerar_ficha_tecnica(texto_projeto, context, llm)
     }
-
