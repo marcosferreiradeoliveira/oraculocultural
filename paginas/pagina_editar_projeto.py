@@ -223,25 +223,37 @@ def pagina_editar_projeto():
                     # Verificar se documentos existe
                     if 'documentos' not in projeto_completo:
                         st.warning("Campo 'documentos' NÃO EXISTE neste projeto")
+                        # Inicializa o campo documentos se não existir
+                        doc_ref.update({
+                            'documentos': {}
+                        })
                         documento_existente = None
                     else:
                         docs = projeto_completo['documentos']
-                        st.write(f"Campo 'documentos' encontrado com {len(docs)} itens")
-                        
-                        # Listar todos os documentos disponíveis
-                        st.write("Documentos disponíveis:", list(docs.keys()))
-                        
-                        # Verificar se o documento específico existe
-                        if chave not in docs:
-                            st.warning(f"Documento '{chave}' não existe no campo 'documentos'")
+                        if not isinstance(docs, dict):
+                            st.warning("Campo 'documentos' não é um dicionário válido")
                             documento_existente = None
                         else:
-                            documento_existente = docs[chave]
-                            st.success(f"Documento '{tipo_selecionado}' encontrado com {len(documento_existente)} caracteres")
+                            st.write(f"Campo 'documentos' encontrado com {len(docs)} itens")
                             
-                            # Mostrar o início do documento
-                            st.write("Primeiros 100 caracteres:")
-                            st.code(documento_existente[:100] + "..." if len(documento_existente) > 100 else documento_existente)
+                            # Listar todos os documentos disponíveis
+                            st.write("Documentos disponíveis:", list(docs.keys()))
+                            
+                            # Verificar se o documento específico existe
+                            if chave not in docs:
+                                st.warning(f"Documento '{chave}' não existe no campo 'documentos'")
+                                documento_existente = None
+                            else:
+                                documento_existente = docs[chave]
+                                if not isinstance(documento_existente, str):
+                                    st.warning(f"Documento '{chave}' não é uma string válida")
+                                    documento_existente = None
+                                else:
+                                    st.success(f"Documento '{tipo_selecionado}' encontrado com {len(documento_existente)} caracteres")
+                                    
+                                    # Mostrar o início do documento
+                                    st.write("Primeiros 100 caracteres:")
+                                    st.code(documento_existente[:100] + "..." if len(documento_existente) > 100 else documento_existente)
             except Exception as e:
                 st.error(f"Erro ao buscar documento: {str(e)}")
                 st.write("Detalhes técnicos do erro:")
@@ -298,15 +310,42 @@ def pagina_editar_projeto():
                 # Opções para salvar o novo documento
                 if st.button("💾 Salvar no Projeto", key=f"save_{chave}"):
                     try:
-                        # Atualiza o documento específico mantendo outros existentes
+                        # Primeiro, verifica se o documento existe e obtém sua estrutura atual
+                        doc_ref = db.collection('projetos').document(projeto_id)
+                        doc = doc_ref.get()
+                        
+                        if not doc.exists:
+                            st.error("Projeto não encontrado no banco de dados!")
+                            return
+                            
+                        projeto_data = doc.to_dict()
+                        
+                        # Prepara a estrutura de documentos
+                        documentos = projeto_data.get('documentos', {})
+                        if not isinstance(documentos, dict):
+                            documentos = {}
+                            
+                        # Atualiza o documento específico
+                        documentos[chave] = st.session_state[chave]
+                        
+                        # Atualiza o documento no Firestore
                         update_data = {
-                            f'documentos.{chave}': st.session_state[chave],
+                            'documentos': documentos,
                             'ultima_atualizacao': firestore.SERVER_TIMESTAMP
                         }
                         
                         doc_ref.update(update_data)
-                        st.success("Documento salvo com sucesso no projeto!")
+                        
+                        # Verifica se a atualização foi bem-sucedida
+                        doc_atualizado = doc_ref.get()
+                        if doc_atualizado.exists and doc_atualizado.to_dict().get('documentos', {}).get(chave) == st.session_state[chave]:
+                            st.success("Documento salvo com sucesso no projeto!")
+                        else:
+                            st.error("Erro ao verificar a atualização do documento.")
+                            
                     except Exception as e:
                         st.error(f"Erro ao salvar documento: {str(e)}")
+                        st.write("Detalhes técnicos do erro:")
+                        st.exception(e)
 
 
