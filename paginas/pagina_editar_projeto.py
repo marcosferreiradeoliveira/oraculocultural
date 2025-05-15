@@ -45,8 +45,9 @@ def pagina_editar_projeto():
             cred = credentials.Certificate("config/firebase-service-account.json")
             firebase_admin.initialize_app(cred)
         db = firestore.client()
+        st.sidebar.success("Conexão com Firebase estabelecida!")
     except Exception as e:
-        st.error(f"Erro ao conectar com o banco de dados: {str(e)}")
+        st.sidebar.error(f"Erro ao conectar com o banco de dados: {str(e)}")
         return
 
     # Verificação de autenticação e projeto selecionado
@@ -181,7 +182,7 @@ def pagina_editar_projeto():
                 "Etapas de Trabalho": ("etapas_trabalho", gerar_etapas_trabalho),
                 "Ficha Técnica": ("ficha_tecnica", gerar_ficha_tecnica)
             }
-
+            
             # Seleção do tipo de documento
             tipo_selecionado = st.selectbox(
                 "Selecione o tipo de documento:", 
@@ -192,44 +193,61 @@ def pagina_editar_projeto():
             # Obter chave e função correspondente
             chave, funcao_geradora = tipos_documentos[tipo_selecionado]
             
-            # Verificar se já existe documento no Firebase
-            doc_ref = db.collection('projetos').document(projeto['id'])
-            doc_snapshot = doc_ref.get()
+            # NOVA IMPLEMENTAÇÃO: Buscar documento diretamente com mais logs
+            st.write("### Verificando documento no Firestore")
             
-            # Adicionar mais debugging
-            st.write("Verificando no Firestore...")
+            # ID do projeto para depuração
+            projeto_id = projeto['id']
+            st.write(f"ID do projeto: `{projeto_id}`")
             
-            documento_existente = None
-            if doc_snapshot.exists:
-                projeto_data = doc_snapshot.to_dict()
+            # Tentar todas as abordagens possíveis para buscar o documento
+            try:
+                # Abordagem 1: Buscar diretamente
+                doc_ref = db.collection('projetos').document(projeto_id)
+                doc = doc_ref.get()
                 
-                # Exibir estrutura do documento para debugging
-                st.write("Documento encontrado no Firestore.")
-                st.write("Campos disponíveis:", ", ".join(projeto_data.keys()))
-                
-                if 'documentos' in projeto_data:
-                    st.write("Campo 'documentos' encontrado com as chaves:", ", ".join(projeto_data['documentos'].keys() if projeto_data['documentos'] else []))
+                if not doc.exists:
+                    st.error(f"Documento com ID {projeto_id} não existe no Firestore!")
+                    documento_existente = None
+                else:
+                    st.success(f"Documento encontrado no Firestore com ID: {projeto_id}")
+                    projeto_completo = doc.to_dict()
                     
-                    if chave in projeto_data['documentos']:
-                        documento_existente = projeto_data['documentos'][chave]
-                        st.success(f"✅ Documento '{tipo_selecionado}' encontrado no banco de dados!")
+                    # Print para debugging
+                    st.write("Campos disponíveis:", list(projeto_completo.keys()))
+                    
+                    # Exibir conteúdo completo para debug
+                    with st.expander("Visualizar estrutura completa do documento"):
+                        st.json(projeto_completo)
+                    
+                    # Verificar se documentos existe
+                    if 'documentos' not in projeto_completo:
+                        st.warning("Campo 'documentos' NÃO EXISTE neste projeto")
+                        documento_existente = None
                     else:
-                        st.info(f"Chave '{chave}' não encontrada dentro do campo 'documentos'")
-                else:
-                    st.info("Campo 'documentos' não encontrado no projeto do Firestore")
-            else:
-                st.warning(f"Documento com ID {projeto['id']} não encontrado no Firestore")
-            
-            # Exibir valor atual em session_state e projeto local
-            if st.checkbox("Mostrar dados detalhados para debug", value=False):
-                st.write("ID do projeto:", projeto.get('id'))
-                if 'documentos' in projeto:
-                    st.write("Documentos no objeto projeto em memória:")
-                    for k, v in projeto.get('documentos', {}).items():
-                        st.write(f"- {k}: {v[:100]}..." if v and len(v) > 100 else f"- {k}: {v}")
-                else:
-                    st.write("Nenhum campo 'documentos' no objeto projeto em memória")
-            
+                        docs = projeto_completo['documentos']
+                        st.write(f"Campo 'documentos' encontrado com {len(docs)} itens")
+                        
+                        # Listar todos os documentos disponíveis
+                        st.write("Documentos disponíveis:", list(docs.keys()))
+                        
+                        # Verificar se o documento específico existe
+                        if chave not in docs:
+                            st.warning(f"Documento '{chave}' não existe no campo 'documentos'")
+                            documento_existente = None
+                        else:
+                            documento_existente = docs[chave]
+                            st.success(f"Documento '{tipo_selecionado}' encontrado com {len(documento_existente)} caracteres")
+                            
+                            # Mostrar o início do documento
+                            st.write("Primeiros 100 caracteres:")
+                            st.code(documento_existente[:100] + "..." if len(documento_existente) > 100 else documento_existente)
+            except Exception as e:
+                st.error(f"Erro ao buscar documento: {str(e)}")
+                st.write("Detalhes técnicos do erro:")
+                st.exception(e)
+                documento_existente = None
+
             # Exibir documento existente ou opção para gerar novo
             if documento_existente:
                 st.subheader(f"📄 {tipo_selecionado} Existente")
