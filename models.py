@@ -176,3 +176,21 @@ def gerar_documento_completo(
         "cronograma": gerar_cronograma(texto_projeto, context, llm),
         # Adicione outros documentos conforme necessário
     }
+
+def gerar_objetivos(texto_projeto, diagnostico=None, llm=None):
+    """Formula objetivos no padrão SMART"""
+    template = """
+    Reformule os objetivos como SMART:
+    [ESPECÍFICO] - O quê exatamente será feito?
+    [MENSURÁVEL] - Como medir o sucesso?
+    [ATINGÍVEL] - É realista com os recursos?
+    [RELEVANTE] - Alinhamento com metas maiores?
+    [TEMPORAL] - Qual o prazo final?
+
+    NUMERE E FORMATE CLARAMENTE
+
+    PROJETO:
+    {texto}"""
+
+    chain = _create_chain(template, llm, diagnostico)
+    return chain.invoke({"texto": texto_projeto[:15000]})
