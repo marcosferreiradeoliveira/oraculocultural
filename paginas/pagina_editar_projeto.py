@@ -196,12 +196,39 @@ def pagina_editar_projeto():
             doc_ref = db.collection('projetos').document(projeto['id'])
             doc_snapshot = doc_ref.get()
             
+            # Adicionar mais debugging
+            st.write("Verificando no Firestore...")
+            
             documento_existente = None
             if doc_snapshot.exists:
                 projeto_data = doc_snapshot.to_dict()
-                if 'documentos' in projeto_data and chave in projeto_data['documentos']:
-                    documento_existente = projeto_data['documentos'][chave]
-                    st.success(f"✅ Documento '{tipo_selecionado}' encontrado no banco de dados!")
+                
+                # Exibir estrutura do documento para debugging
+                st.write("Documento encontrado no Firestore.")
+                st.write("Campos disponíveis:", ", ".join(projeto_data.keys()))
+                
+                if 'documentos' in projeto_data:
+                    st.write("Campo 'documentos' encontrado com as chaves:", ", ".join(projeto_data['documentos'].keys() if projeto_data['documentos'] else []))
+                    
+                    if chave in projeto_data['documentos']:
+                        documento_existente = projeto_data['documentos'][chave]
+                        st.success(f"✅ Documento '{tipo_selecionado}' encontrado no banco de dados!")
+                    else:
+                        st.info(f"Chave '{chave}' não encontrada dentro do campo 'documentos'")
+                else:
+                    st.info("Campo 'documentos' não encontrado no projeto do Firestore")
+            else:
+                st.warning(f"Documento com ID {projeto['id']} não encontrado no Firestore")
+            
+            # Exibir valor atual em session_state e projeto local
+            if st.checkbox("Mostrar dados detalhados para debug", value=False):
+                st.write("ID do projeto:", projeto.get('id'))
+                if 'documentos' in projeto:
+                    st.write("Documentos no objeto projeto em memória:")
+                    for k, v in projeto.get('documentos', {}).items():
+                        st.write(f"- {k}: {v[:100]}..." if v and len(v) > 100 else f"- {k}: {v}")
+                else:
+                    st.write("Nenhum campo 'documentos' no objeto projeto em memória")
             
             # Exibir documento existente ou opção para gerar novo
             if documento_existente:
