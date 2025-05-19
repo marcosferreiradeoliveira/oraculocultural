@@ -1,0 +1,12 @@
+# Constantes para nomes de chave do session_state
+USER_SESSION_KEY = 'user'
+AUTENTICADO_SESSION_KEY = 'autenticado'
+PAGINA_ATUAL_SESSION_KEY = 'pagina_atual'
+PROJETO_SELECIONADO_KEY = 'projeto_selecionado'
+TEXTO_PROJETO_KEY = 'texto_projeto'
+RESUMO_KEY = 'resumo'
+ORCAMENTO_KEY = 'orcamento'
+CRONOGRAMA_KEY = 'cronograma'
+OBJETIVOS_KEY = 'objetivos'
+JUSTIFICATIVA_KEY = 'justificativa'
+EDITAL_SELECIONADO_KEY = 'edital_selecionado' 
