@@ -21,6 +21,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1 import FieldFilter # Usado em get_user_projects
 import json # Importado para tentar carregar JSON de string
+from streamlit.runtime.secrets import AttrDict # Import AttrDict para verificação de tipo
 
 # Importações de modelos e utilitários
 from models import (
@@ -121,11 +122,15 @@ def initialize_firebase_app():
                 FIREBASE_INIT_ERROR_MESSAGE = error_msg
                 FIREBASE_APP_INITIALIZED = False
                 return False
+        elif isinstance(firebase_config_raw, AttrDict): # Verifica se é AttrDict
+            print("DEBUG Firebase Init: firebase_config_raw é um AttrDict. Convertendo para dict...")
+            firebase_config_dict = dict(firebase_config_raw) # Converte para dict
+            print("DEBUG Firebase Init: AttrDict convertido para dict com sucesso.")
         elif isinstance(firebase_config_raw, dict):
             firebase_config_dict = firebase_config_raw
-            print("DEBUG Firebase Init: firebase_config_raw já é um dicionário.")
+            print("DEBUG Firebase Init: firebase_config_raw já é um dicionário padrão.")
         else:
-            error_msg = f"ERRO: 'firebase_credentials' não é nem string nem dicionário. Tipo encontrado: {type(firebase_config_raw)}"
+            error_msg = f"ERRO: 'firebase_credentials' não é nem string, nem AttrDict, nem dicionário padrão. Tipo encontrado: {type(firebase_config_raw)}"
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
@@ -159,19 +164,15 @@ def initialize_firebase_app():
             return False
 
         private_key = firebase_config_dict.get('private_key', '')
-        # A chave privada em JSON pode ter \n como literais, que precisam ser substituídos por novas linhas reais.
-        # No entanto, credentials.Certificate geralmente lida com isso. A verificação principal é a presença e os marcadores.
         private_key_processed = private_key.replace('\\n', '\n')
 
         if not private_key_processed.startswith('-----BEGIN PRIVATE KEY-----') or not private_key_processed.strip().endswith('-----END PRIVATE KEY-----'):
             error_msg = "ERRO: Formato inválido da chave privada. Deve incluir os marcadores BEGIN e END e estar corretamente formatada."
-            # print(f"DEBUG: Private key processada (primeiros/últimos 100 chars): {private_key_processed[:100]}...{private_key_processed[-100:]}")
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
         
-        # Use o dicionário processado para criar as credenciais
         cred = credentials.Certificate(firebase_config_dict)
         firebase_admin.initialize_app(cred)
         print("INFO: Conexão com Firebase estabelecida usando st.secrets!") 
