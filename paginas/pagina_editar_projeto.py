@@ -343,16 +343,21 @@ Certifique-se de retornar APENAS o texto do projeto revisado e aprimorado. Não 
         edital_associado_id = projeto.get('edital_associado')
         lista_documentos_sugeridos = []
         
-        # Cache para documentos sugeridos pelo edital
-        cache_key_docs_edital = f'docs_sugeridos_edital_{edital_associado_id}_{projeto_id}'
+        # Primeiro, tentar carregar documentos sugeridos do Firestore
+        try:
+            doc_ref = db.collection('projetos').document(projeto_id)
+            doc_snapshot = doc_ref.get()
+            if doc_snapshot.exists:
+                projeto_data = doc_snapshot.to_dict()
+                documentos_sugeridos = projeto_data.get('documentos_sugeridos', [])
+                if documentos_sugeridos:
+                    lista_documentos_sugeridos = documentos_sugeridos
+                    st.info(f"Documentos sugeridos pelo edital carregados do banco de dados.")
+        except Exception as e:
+            st.error(f"Erro ao carregar documentos sugeridos: {str(e)}")
 
         if edital_associado_id:
-            if cache_key_docs_edital in st.session_state:
-                lista_documentos_sugeridos = st.session_state[cache_key_docs_edital]
-                if lista_documentos_sugeridos: # Verifica se a lista não está vazia (pode ter sido cacheada como vazia)
-                     st.info(f"Usando lista de documentos sugeridos anteriormente para o edital associado.")
-            
-            if not lista_documentos_sugeridos: # Se não está no cache ou o cache está vazio
+            if not lista_documentos_sugeridos:
                 if st.button("🔍 Analisar Edital para Sugerir Documentos", key=f"analisar_edital_docs_{projeto_id}"):
                     with st.spinner(f"Analisando edital ID: {edital_associado_id}... Isso pode levar um momento."):
                         try:
@@ -361,8 +366,6 @@ Certifique-se de retornar APENAS o texto do projeto revisado e aprimorado. Não 
                             if edital_doc.exists:
                                 edital_data = edital_doc.to_dict()
                                 texto_edital = edital_data.get('texto_edital', '')
-                                # Futuramente, poderia buscar um campo específico 'criterios_pontuacao'
-                                # criterios_pontuacao = edital_data.get('criterios_pontuacao', '') 
 
                                 if texto_edital:
                                     prompt_extracao_docs = f"""
@@ -386,10 +389,14 @@ Não inclua números ou marcadores na lista, apenas um nome de documento por lin
                                         lista_documentos_sugeridos = [line.strip() for line in docs_extraidos_texto.split('\n') if line.strip()]
                                     
                                     if lista_documentos_sugeridos:
-                                        st.session_state[cache_key_docs_edital] = lista_documentos_sugeridos
-                                        st.success(f"Edital analisado! {len(lista_documentos_sugeridos)} tipos de documentos/seções sugeridos.")
+                                        # Salvar a lista de documentos no Firestore
+                                        doc_ref = db.collection('projetos').document(projeto_id)
+                                        doc_ref.update({
+                                            'documentos_sugeridos': lista_documentos_sugeridos,
+                                            'ultima_atualizacao': firestore.SERVER_TIMESTAMP
+                                        })
+                                        st.success(f"Edital analisado! {len(lista_documentos_sugeridos)} tipos de documentos/seções sugeridos e salvos no banco de dados.")
                                     else:
-                                        st.session_state[cache_key_docs_edital] = [] # Cacheia lista vazia para não reanalisar sem necessidade
                                         st.warning("Não foi possível identificar documentos específicos no edital ou o edital não os detalha. Verifique o texto do edital manualmente.")
                                     st.rerun()
                                 else:
@@ -397,8 +404,8 @@ Não inclua números ou marcadores na lista, apenas um nome de documento por lin
                             else:
                                 st.error(f"Edital com ID {edital_associado_id} não encontrado.")
                         except Exception as e:
-                            st.error(f"Erro ao analisar edital: {str(e)}"); st.code(traceback.format_exc())
-                            st.session_state[cache_key_docs_edital] = [] # Erro, cacheia lista vazia
+                            st.error(f"Erro ao analisar edital: {str(e)}")
+                            st.code(traceback.format_exc())
         else:
             st.info("Nenhum edital associado a este projeto para guiar a geração de documentos. Usando lista padrão.")
 
@@ -408,9 +415,9 @@ Não inclua números ou marcadores na lista, apenas um nome de documento por lin
 
         if lista_documentos_sugeridos:
             for nome_doc in lista_documentos_sugeridos:
-                opcoes_documentos_dict[nome_doc] = (slugify(nome_doc), None) # (chave, funcao_geradora - None para genérica)
+                opcoes_documentos_dict[nome_doc] = (slugify(nome_doc), None)
         
-        if not opcoes_documentos_dict: # Fallback para lista padrão
+        if not opcoes_documentos_dict:
             usando_lista_padrao = True
             st.caption("Recorrendo à lista de documentos padrão.")
             opcoes_documentos_dict = {
@@ -436,7 +443,7 @@ Não inclua números ou marcadores na lista, apenas um nome de documento por lin
         if tipo_selecionado_nome:
             chave_doc_selecionado, funcao_geradora_especifica = opcoes_documentos_dict[tipo_selecionado_nome]
             
-            # Lógica para buscar/mostrar documento existente e gerar novo (adaptada)
+            # Lógica para buscar/mostrar documento existente e gerar novo
             documento_existente_conteudo = None
             try:
                 doc_ref = db.collection('projetos').document(projeto_id)
@@ -449,7 +456,7 @@ Não inclua números ou marcadores na lista, apenas um nome de documento por lin
             except Exception as e:
                 st.error(f"Erro ao buscar '{tipo_selecionado_nome}' existente: {str(e)}")
 
-            # Chave para gerenciar o estado do documento na sessão (gerado mas não salvo)
+            # Chave para gerenciar o estado do documento na sessão
             chave_sessao_doc_atual = f"doc_gerado_{chave_doc_selecionado}_{projeto_id}"
 
             # Botão para (Re)Gerar o documento
@@ -457,10 +464,23 @@ Não inclua números ou marcadores na lista, apenas um nome de documento por lin
                          key=f"btn_gerar_{chave_doc_selecionado}_{projeto_id}"):
                 with st.spinner(f"Gerando '{tipo_selecionado_nome}'..."):
                     try:
-                        novo_documento_gerado = ""
-                        if funcao_geradora_especifica: # Se temos uma função específica da lista padrão
-                            novo_documento_gerado = funcao_geradora_especifica(texto_base_projeto, context=diagnostico_base_projeto, llm=llm)
-                        else: # Usar LLM genérica para documentos extraídos do edital
+                        # Criar um container vazio para o streaming
+                        doc_container = st.empty()
+                        doc_texto_stream = ""
+                        
+                        def update_doc_stream(text):
+                            nonlocal doc_texto_stream
+                            doc_texto_stream += text
+                            doc_container.markdown(doc_texto_stream)
+                            time.sleep(0.005)  # Pequeno delay para visualização suave
+
+                        if funcao_geradora_especifica:
+                            # Para funções específicas, precisamos adaptar para streaming
+                            response = funcao_geradora_especifica(texto_base_projeto, context=diagnostico_base_projeto, llm=llm)
+                            for char in response:
+                                update_doc_stream(char)
+                            novo_documento_gerado = doc_texto_stream
+                        else:
                             prompt_geracao_doc_generico = f"""
 Você é um especialista em elaboração de propostas para editais.
 Com base no TEXTO DO PROJETO e, opcionalmente, no DIAGNÓSTICO fornecido, sua tarefa é gerar um documento detalhado e completo do tipo: '{tipo_selecionado_nome}'.
@@ -475,26 +495,32 @@ DIAGNÓSTICO DO PROJETO (use com discernimento, pode não ser totalmente relevan
 
 Por favor, gere o documento '{tipo_selecionado_nome}':
 """
-                            response_doc_gen = llm.invoke(prompt_geracao_doc_generico)
-                            novo_documento_gerado = (response_doc_gen.content if hasattr(response_doc_gen, 'content') else str(response_doc_gen)).strip()
+                            # Usar streaming para a resposta do LLM
+                            for chunk in llm.stream(prompt_geracao_doc_generico):
+                                if hasattr(chunk, 'content'):
+                                    update_doc_stream(chunk.content)
+                                else:
+                                    update_doc_stream(str(chunk))
+                            novo_documento_gerado = doc_texto_stream.strip()
                         
                         st.session_state[chave_sessao_doc_atual] = novo_documento_gerado
                         st.success(f"'{tipo_selecionado_nome}' gerado/atualizado! Revise abaixo e salve.")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Erro ao gerar '{tipo_selecionado_nome}': {str(e)}"); st.code(traceback.format_exc())
+                        st.error(f"Erro ao gerar '{tipo_selecionado_nome}': {str(e)}")
+                        st.code(traceback.format_exc())
             
-            # Mostrar área de edição/visualização para documento recém-gerado ou existente
+            # Mostrar área de edição/visualização para documento
             conteudo_para_mostrar = ""
             subtitulo_area = ""
 
             if chave_sessao_doc_atual in st.session_state:
                 conteudo_para_mostrar = st.session_state[chave_sessao_doc_atual]
-                subtitulo_area = f"📝 Pré-visualização/Edição de '{tipo_selecionado_nome}' Gerado"
+                subtitulo_area = f"📝 Edição de '{tipo_selecionado_nome}'"
             elif documento_existente_conteudo:
                 conteudo_para_mostrar = documento_existente_conteudo
-                subtitulo_area = f"📄 '{tipo_selecionado_nome}' Existente (Somente Visualização)"
-                st.session_state[chave_sessao_doc_atual] = documento_existente_conteudo # Coloca na sessão para possível edição se regerar
+                subtitulo_area = f"📄 '{tipo_selecionado_nome}'"
+                st.session_state[chave_sessao_doc_atual] = documento_existente_conteudo
             
             if subtitulo_area:
                 st.subheader(subtitulo_area)
@@ -502,42 +528,50 @@ Por favor, gere o documento '{tipo_selecionado_nome}':
                     "Conteúdo do documento:",
                     value=conteudo_para_mostrar,
                     height=350,
-                    key=f"textarea_{chave_doc_selecionado}_{projeto_id}",
-                    disabled=not (chave_sessao_doc_atual in st.session_state and st.session_state.get(chave_sessao_doc_atual) is not None) # Habilita edição se foi gerado
+                    key=f"textarea_{chave_doc_selecionado}_{projeto_id}"
                 )
+                
                 # Atualiza sessão se editado
-                if chave_sessao_doc_atual in st.session_state and doc_editado_na_sessao != st.session_state[chave_sessao_doc_atual]:
+                if doc_editado_na_sessao != st.session_state.get(chave_sessao_doc_atual):
                     st.session_state[chave_sessao_doc_atual] = doc_editado_na_sessao
 
-                # Botão Salvar e Download (aparecem se houver conteúdo na sessão para salvar ou conteúdo existente para baixar)
-                if chave_sessao_doc_atual in st.session_state and st.session_state[chave_sessao_doc_atual]:
-                    if st.button(f"💾 Salvar '{tipo_selecionado_nome}' no Projeto", key=f"btn_salvar_{chave_doc_selecionado}_{projeto_id}"):
+                # Botão Salvar e Download
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button(f"💾 Salvar '{tipo_selecionado_nome}'", key=f"btn_salvar_{chave_doc_selecionado}_{projeto_id}"):
                         try:
                             doc_ref_save = db.collection('projetos').document(projeto_id)
                             doc_snapshot_save = doc_ref_save.get()
                             current_project_data = doc_snapshot_save.to_dict() if doc_snapshot_save.exists else {}
                             
                             documentos_map = current_project_data.get('documentos', {})
-                            if not isinstance(documentos_map, dict): documentos_map = {}
+                            if not isinstance(documentos_map, dict):
+                                documentos_map = {}
                             
                             documentos_map[chave_doc_selecionado] = st.session_state[chave_sessao_doc_atual]
                             
-                            doc_ref_save.set({'documentos': documentos_map, 'ultima_atualizacao': firestore.SERVER_TIMESTAMP}, merge=True)
+                            doc_ref_save.set({
+                                'documentos': documentos_map,
+                                'ultima_atualizacao': firestore.SERVER_TIMESTAMP
+                            }, merge=True)
+                            
                             st.success(f"'{tipo_selecionado_nome}' salvo com sucesso!")
-                            del st.session_state[chave_sessao_doc_atual] # Limpa da sessão após salvar
+                            del st.session_state[chave_sessao_doc_atual]
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erro ao salvar '{tipo_selecionado_nome}': {str(e)}"); st.code(traceback.format_exc())
+                            st.error(f"Erro ao salvar '{tipo_selecionado_nome}': {str(e)}")
+                            st.code(traceback.format_exc())
                 
-                if documento_existente_conteudo:
-                     st.download_button(
-                        label=f"⏬ Baixar '{tipo_selecionado_nome}' Salvo",
-                        data=documento_existente_conteudo,
-                        file_name=f"{slugify(projeto.get('nome','projeto'))}_{chave_doc_selecionado}.txt",
-                        mime="text/plain",
-                        key=f"dl_{chave_doc_selecionado}_{projeto_id}"
-                    )
+                with col2:
+                    if documento_existente_conteudo:
+                        st.download_button(
+                            label=f"⏬ Baixar '{tipo_selecionado_nome}'",
+                            data=documento_existente_conteudo,
+                            file_name=f"{slugify(projeto.get('nome','projeto'))}_{chave_doc_selecionado}.txt",
+                            mime="text/plain",
+                            key=f"dl_{chave_doc_selecionado}_{projeto_id}"
+                        )
             elif not lista_documentos_sugeridos and not usando_lista_padrao and edital_associado_id:
                 st.info("Clique em 'Analisar Edital para Sugerir Documentos' para começar.")
             elif not opcoes_documentos_dict:
-                 st.warning(f"Nenhum documento '{tipo_selecionado_nome}' encontrado ou gerado para este projeto.")
+                st.warning(f"Nenhum documento '{tipo_selecionado_nome}' encontrado ou gerado para este projeto.")
