@@ -38,10 +38,57 @@ def carrega_csv(caminho):
     return documento
 
 def carrega_pdf(caminho):
-    loader = PyPDFLoader(caminho)
-    lista_documentos = loader.load()
-    documento = '\n\n'.join([doc.page_content for doc in lista_documentos])
-    return documento
+    """Carrega e extrai texto de um arquivo PDF com tratamento de erros robusto"""
+    try:
+        # Tenta primeiro com PyPDFLoader
+        try:
+            loader = PyPDFLoader(caminho)
+            lista_documentos = loader.load()
+            documento = '\n\n'.join([doc.page_content for doc in lista_documentos])
+            if documento and len(documento.strip()) > 10:
+                return documento
+        except Exception as e:
+            print(f"PyPDFLoader falhou: {str(e)}")
+            # Se falhar, continua para tentar outros métodos
+
+        # Se PyPDFLoader falhar ou retornar texto vazio, tenta com pypdf diretamente
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(caminho)
+            texto = ""
+            for page in reader.pages:
+                texto += page.extract_text() + "\n\n"
+            if texto and len(texto.strip()) > 10:
+                return texto.strip()
+        except Exception as e:
+            print(f"pypdf falhou: {str(e)}")
+            # Se falhar, continua para tentar outros métodos
+
+        # Se ainda não conseguiu, tenta com pdfplumber
+        try:
+            import pdfplumber
+            with pdfplumber.open(caminho) as pdf:
+                texto = ""
+                for page in pdf.pages:
+                    texto += page.extract_text() + "\n\n"
+                if texto and len(texto.strip()) > 10:
+                    return texto.strip()
+        except Exception as e:
+            print(f"pdfplumber falhou: {str(e)}")
+
+        # Se nenhum método funcionou, retorna erro
+        raise Exception("Não foi possível extrair texto do PDF usando nenhum dos métodos disponíveis. O arquivo pode estar corrompido, protegido por senha ou conter apenas imagens.")
+
+    except Exception as e:
+        error_msg = str(e)
+        if "password" in error_msg.lower():
+            raise Exception("O PDF está protegido por senha. Por favor, remova a proteção e tente novamente.")
+        elif "not a PDF" in error_msg.lower():
+            raise Exception("O arquivo não parece ser um PDF válido.")
+        elif "corrupted" in error_msg.lower():
+            raise Exception("O arquivo PDF parece estar corrompido.")
+        else:
+            raise Exception(f"Erro ao processar PDF: {error_msg}")
 
 def carrega_txt(caminho):
     loader = TextLoader(caminho)
