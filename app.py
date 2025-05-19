@@ -106,9 +106,27 @@ def initialize_firebase_app():
             FIREBASE_APP_INITIALIZED = False
             return False
 
-        firebase_config_dict = st.secrets["firebase_credentials"]
-        print("DEBUG: Tipo do firebase_config_dict:", type(firebase_config_dict))
-        print("DEBUG: Conteúdo do firebase_config_dict:", firebase_config_dict)
+        # Get the raw credentials from secrets
+        raw_creds = st.secrets["firebase_credentials"]
+        print("DEBUG: Tipo do raw_creds:", type(raw_creds))
+        print("DEBUG: Conteúdo do raw_creds:", raw_creds)
+
+        # Convert to dictionary if it's not already
+        if isinstance(raw_creds, str):
+            try:
+                import json
+                firebase_config_dict = json.loads(raw_creds)
+            except json.JSONDecodeError:
+                error_msg = "ERRO: Não foi possível converter as credenciais para um dicionário."
+                print(error_msg)
+                FIREBASE_INIT_ERROR_MESSAGE = error_msg
+                FIREBASE_APP_INITIALIZED = False
+                return False
+        else:
+            firebase_config_dict = raw_creds
+
+        print("DEBUG: Tipo do firebase_config_dict após conversão:", type(firebase_config_dict))
+        print("DEBUG: Conteúdo do firebase_config_dict após conversão:", firebase_config_dict)
         
         # Validate required fields
         required_fields = [
