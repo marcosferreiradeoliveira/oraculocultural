@@ -2,6 +2,7 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import auth, firestore, credentials
 from constants import PAGINA_ATUAL_SESSION_KEY
+from services.firebase_init import initialize_firebase, get_error_message
 
 # É uma boa prática verificar se o Firebase Admin já foi inicializado,
 # especialmente se este código puder ser chamado em diferentes contextos.
@@ -11,21 +12,11 @@ from constants import PAGINA_ATUAL_SESSION_KEY
 
 try:
     if not firebase_admin._apps:
-        if not hasattr(st, 'secrets'):
-            st.error("st.secrets não está disponível. Verifique se está rodando no Streamlit Cloud.")
-            db = None
-        elif "firebase_credentials" not in st.secrets:
-            st.error("'firebase_credentials' não encontrado em st.secrets. Verifique as configurações no Streamlit Cloud.")
+        if not initialize_firebase():
+            st.error(get_error_message())
             db = None
         else:
-            firebase_config_dict = st.secrets["firebase_credentials"]
-            if not isinstance(firebase_config_dict, dict) or not firebase_config_dict.get("type") == "service_account":
-                st.error("'firebase_credentials' em st.secrets não é um dicionário de conta de serviço válido.")
-                db = None
-            else:
-                cred = credentials.Certificate(firebase_config_dict)
-                firebase_admin.initialize_app(cred)
-                print("Firebase Admin inicializado em pagina_cadastro.")
+            db = firestore.client()
 except Exception as e:
     if "already initialized" not in str(e).lower(): # Ignora erro de já inicializado
         st.error(f"Falha ao inicializar Firebase Admin (necessário para Firestore): {e}")

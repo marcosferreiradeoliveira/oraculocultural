@@ -3,6 +3,7 @@ import firebase_admin
 from firebase_admin import credentials, auth
 import os
 import time
+from services.firebase_init import initialize_firebase, get_error_message
 
 # Constantes para nomes de chave do session_state
 USER_SESSION_KEY = 'user'
@@ -11,30 +12,12 @@ PAGINA_ATUAL_SESSION_KEY = 'pagina_atual'
 FIREBASE_INITIALIZED_KEY = 'firebase_initialized'
 
 @st.cache_resource
-def initialize_firebase():
+def initialize_firebase_app():
     """Inicializa o Firebase com cache para melhor performance"""
-    try:
-        if not hasattr(st, 'secrets'):
-            st.error("st.secrets não está disponível. Verifique se está rodando no Streamlit Cloud.")
-            return False
-
-        if "firebase_credentials" not in st.secrets:
-            st.error("'firebase_credentials' não encontrado em st.secrets. Verifique as configurações no Streamlit Cloud.")
-            return False
-
-        firebase_config_dict = st.secrets["firebase_credentials"]
-        if not isinstance(firebase_config_dict, dict) or not firebase_config_dict.get("type") == "service_account":
-            st.error("'firebase_credentials' em st.secrets não é um dicionário de conta de serviço válido.")
-            return False
-
-        cred = credentials.Certificate(firebase_config_dict)
-        if not firebase_admin._apps:
-            return firebase_admin.initialize_app(cred, name="streamlit_app")
-        return firebase_admin.get_app()
-    
-    except Exception as e:
-        st.error(f"Erro ao inicializar Firebase: {str(e)}")
-        return None
+    if not initialize_firebase():
+        st.error(get_error_message())
+        return False
+    return True
 
 def handle_login(email, senha):
     """Processa o login de forma otimizada"""
@@ -68,7 +51,7 @@ def handle_login(email, senha):
 def pagina_login():
     """Exibe a página de login com layout moderno e otimizado"""
     # Inicializa o Firebase (com cache)
-    firebase_app = initialize_firebase()
+    firebase_app = initialize_firebase_app()
     if not firebase_app:
         return
 

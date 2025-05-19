@@ -22,6 +22,8 @@ from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1 import FieldFilter # Usado em get_user_projects
 import json # Importado para tentar carregar JSON de string
 from streamlit.runtime.secrets import AttrDict # Import AttrDict para verificação de tipo
+import traceback # Importado para stack traces detalhados
+from services.firebase_init import initialize_firebase, get_error_message
 
 # Importações de modelos e utilitários
 from models import (
@@ -90,113 +92,10 @@ def initialize_firebase_app():
         return True
 
     print("INFO: Tentando inicializar Firebase Admin...")
-    try:
-        if not hasattr(st, 'secrets'):
-            error_msg = "ERRO CRÍTICO: st.secrets não está disponível. Impossível carregar credenciais no Streamlit Cloud."
-            print(error_msg)
-            FIREBASE_INIT_ERROR_MESSAGE = error_msg
-            FIREBASE_APP_INITIALIZED = False
-            return False
-
-        if "firebase_credentials" not in st.secrets:
-            error_msg = "ERRO CRÍTICO: 'firebase_credentials' não encontrado em st.secrets. Verifique as configurações no Streamlit Cloud."
-            print(error_msg)
-            FIREBASE_INIT_ERROR_MESSAGE = error_msg
-            FIREBASE_APP_INITIALIZED = False
-            return False
-
-        # Get raw credentials and convert to dictionary
-        raw_creds = st.secrets["firebase_credentials"]
-        print(f"DEBUG: Tipo do raw_creds: {type(raw_creds)}")
-        
-        # Convert to dictionary
-        if isinstance(raw_creds, AttrDict):
-            print("DEBUG: Convertendo AttrDict para dicionário...")
-            firebase_config_dict = {
-                'type': str(raw_creds.type),
-                'project_id': str(raw_creds.project_id),
-                'private_key_id': str(raw_creds.private_key_id),
-                'private_key': str(raw_creds.private_key),
-                'client_email': str(raw_creds.client_email),
-                'client_id': str(raw_creds.client_id),
-                'auth_uri': str(raw_creds.auth_uri),
-                'token_uri': str(raw_creds.token_uri),
-                'auth_provider_x509_cert_url': str(raw_creds.auth_provider_x509_cert_url),
-                'client_x509_cert_url': str(raw_creds.client_x509_cert_url),
-                'universe_domain': str(raw_creds.universe_domain)
-            }
-        elif isinstance(raw_creds, dict):
-            print("DEBUG: Usando dicionário diretamente...")
-            firebase_config_dict = raw_creds
-        else:
-            error_msg = f"ERRO: Tipo de credencial não suportado: {type(raw_creds)}"
-            print(error_msg)
-            FIREBASE_INIT_ERROR_MESSAGE = error_msg
-            FIREBASE_APP_INITIALIZED = False
-            return False
-
-        print("DEBUG: Verificando campos do dicionário...")
-        print(f"DEBUG: Chaves disponíveis: {list(firebase_config_dict.keys())}")
-        print(f"DEBUG: Tipo de credencial: {firebase_config_dict.get('type')}")
-        print(f"DEBUG: Project ID: {firebase_config_dict.get('project_id')}")
-
-        # Validate required fields
-        required_fields = [
-            'type', 'project_id', 'private_key_id', 'private_key',
-            'client_email', 'client_id', 'auth_uri', 'token_uri',
-            'auth_provider_x509_cert_url', 'client_x509_cert_url'
-        ]
-
-        missing_fields = [field for field in required_fields if field not in firebase_config_dict]
-        if missing_fields:
-            error_msg = f"ERRO: Campos obrigatórios ausentes: {', '.join(missing_fields)}"
-            print(error_msg)
-            FIREBASE_INIT_ERROR_MESSAGE = error_msg
-            FIREBASE_APP_INITIALIZED = False
-            return False
-
-        if firebase_config_dict.get('type') != "service_account":
-            error_msg = f"ERRO: Tipo de credencial inválido: {firebase_config_dict.get('type')}"
-            print(error_msg)
-            FIREBASE_INIT_ERROR_MESSAGE = error_msg
-            FIREBASE_APP_INITIALIZED = False
-            return False
-
-        # Process private key
-        private_key = firebase_config_dict.get('private_key', '')
-        if not private_key:
-            error_msg = "ERRO: Chave privada não encontrada"
-            print(error_msg)
-            FIREBASE_INIT_ERROR_MESSAGE = error_msg
-            FIREBASE_APP_INITIALIZED = False
-            return False
-
-        # Clean up private key
-        private_key = private_key.replace('\\n', '\n').strip()
-        if not private_key.startswith('-----BEGIN PRIVATE KEY-----') or not private_key.endswith('-----END PRIVATE KEY-----'):
-            error_msg = "ERRO: Formato inválido da chave privada"
-            print(error_msg)
-            FIREBASE_INIT_ERROR_MESSAGE = error_msg
-            FIREBASE_APP_INITIALIZED = False
-            return False
-
-        # Update the private key in the config
-        firebase_config_dict['private_key'] = private_key
-
-        print("DEBUG: Tentando inicializar Firebase Admin com as credenciais...")
-        cred = credentials.Certificate(firebase_config_dict)
-        firebase_admin.initialize_app(cred)
-        print("INFO: Firebase Admin inicializado com sucesso!")
-        FIREBASE_APP_INITIALIZED = True
-        return True
-
-    except Exception as e:
-        error_msg = f"ERRO ao inicializar Firebase Admin: {str(e)}"
-        print(error_msg)
-        print("DEBUG: Stack trace:", traceback.format_exc())
-        FIREBASE_INIT_ERROR_MESSAGE = error_msg
-        FIREBASE_APP_INITIALIZED = False
-        return False
+    success = initialize_firebase()
+    FIREBASE_APP_INITIALIZED = success
+    FIREBASE_INIT_ERROR_MESSAGE = get_error_message()
+    return success
 
 initialize_firebase_app()
 print(f"DEBUG app.py global: FIREBASE_APP_INITIALIZED = {FIREBASE_APP_INITIALIZED}, Error: {FIREBASE_INIT_ERROR_MESSAGE}")
