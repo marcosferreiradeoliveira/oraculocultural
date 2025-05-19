@@ -11,22 +11,21 @@ from constants import PAGINA_ATUAL_SESSION_KEY
 
 try:
     if not firebase_admin._apps:
-        # Tenta carregar as credenciais do arquivo. 
-        # Certifique-se de que o caminho para 'firebase-service-account.json' está correto
-        # e acessível no seu ambiente de implantação.
-        # Em alguns ambientes (como o Streamlit Cloud), você pode precisar usar st.secrets.
-        # import os
-        # if not os.path.exists(cred_path) and 'firebase_credentials' in st.secrets:
-        #     cred_dict = st.secrets["firebase_credentials"]
-        #     cred = credentials.Certificate(cred_dict)
-        # else:
-        #     cred = credentials.Certificate(cred_path)
-        
-        # Para simplificar, vamos assumir que o arquivo JSON está no caminho especificado
-        # ou que você adaptará para st.secrets se necessário.
-        cred = credentials.Certificate("config/firebase-service-account.json") # Mantenha ou adapte esta linha
-        firebase_admin.initialize_app(cred)
-        print("Firebase Admin inicializado em pagina_cadastro.")
+        if not hasattr(st, 'secrets'):
+            st.error("st.secrets não está disponível. Verifique se está rodando no Streamlit Cloud.")
+            db = None
+        elif "firebase_credentials" not in st.secrets:
+            st.error("'firebase_credentials' não encontrado em st.secrets. Verifique as configurações no Streamlit Cloud.")
+            db = None
+        else:
+            firebase_config_dict = st.secrets["firebase_credentials"]
+            if not isinstance(firebase_config_dict, dict) or not firebase_config_dict.get("type") == "service_account":
+                st.error("'firebase_credentials' em st.secrets não é um dicionário de conta de serviço válido.")
+                db = None
+            else:
+                cred = credentials.Certificate(firebase_config_dict)
+                firebase_admin.initialize_app(cred)
+                print("Firebase Admin inicializado em pagina_cadastro.")
 except Exception as e:
     if "already initialized" not in str(e).lower(): # Ignora erro de já inicializado
         st.error(f"Falha ao inicializar Firebase Admin (necessário para Firestore): {e}")
