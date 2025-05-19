@@ -1,7 +1,7 @@
 import streamlit as st
 import firebase_admin
-from firebase_admin import auth, firestore, credentials # Adicionado firestore e credentials
-from paginas.login import PAGINA_ATUAL_SESSION_KEY
+from firebase_admin import auth, firestore, credentials
+from constants import PAGINA_ATUAL_SESSION_KEY
 
 # É uma boa prática verificar se o Firebase Admin já foi inicializado,
 # especialmente se este código puder ser chamado em diferentes contextos.
@@ -15,29 +15,22 @@ try:
         # Certifique-se de que o caminho para 'firebase-service-account.json' está correto
         # e acessível no seu ambiente de implantação.
         # Em alguns ambientes (como o Streamlit Cloud), você pode precisar usar st.secrets.
-        try:
-            cred_path = "config/firebase-service-account.json" # Ajuste o caminho se necessário
-            # Verifique se o arquivo existe antes de tentar usá-lo, ou use st.secrets
-            # import os
-            # if not os.path.exists(cred_path) and 'firebase_credentials' in st.secrets:
-            #     cred_dict = st.secrets["firebase_credentials"]
-            #     cred = credentials.Certificate(cred_dict)
-            # else:
-            #     cred = credentials.Certificate(cred_path)
-            
-            # Para simplificar, vamos assumir que o arquivo JSON está no caminho especificado
-            # ou que você adaptará para st.secrets se necessário.
-            cred = credentials.Certificate("config/firebase-service-account.json") # Mantenha ou adapte esta linha
-            firebase_admin.initialize_app(cred)
-            print("Firebase Admin inicializado em pagina_cadastro.")
-        except Exception as e:
-            if "already initialized" not in str(e).lower(): # Ignora erro de já inicializado
-                st.error(f"Falha ao inicializar Firebase Admin (necessário para Firestore): {e}")
-                print(f"Erro de inicialização Firebase em pagina_cadastro: {e}")
-    db = firestore.client()
+        # import os
+        # if not os.path.exists(cred_path) and 'firebase_credentials' in st.secrets:
+        #     cred_dict = st.secrets["firebase_credentials"]
+        #     cred = credentials.Certificate(cred_dict)
+        # else:
+        #     cred = credentials.Certificate(cred_path)
+        
+        # Para simplificar, vamos assumir que o arquivo JSON está no caminho especificado
+        # ou que você adaptará para st.secrets se necessário.
+        cred = credentials.Certificate("config/firebase-service-account.json") # Mantenha ou adapte esta linha
+        firebase_admin.initialize_app(cred)
+        print("Firebase Admin inicializado em pagina_cadastro.")
 except Exception as e:
-    st.error(f"Erro crítico com Firebase/Firestore na página de cadastro: {e}")
-    # Em um cenário real, você pode querer impedir o cadastro se o Firestore não estiver acessível.
+    if "already initialized" not in str(e).lower(): # Ignora erro de já inicializado
+        st.error(f"Falha ao inicializar Firebase Admin (necessário para Firestore): {e}")
+        print(f"Erro de inicialização Firebase em pagina_cadastro: {e}")
     db = None 
     print(f"Firestore client não pôde ser obtido em pagina_cadastro: {e}")
 

@@ -29,18 +29,20 @@ from paginas.reset_password import pagina_reset_password
 from paginas.cadastro import pagina_cadastro
 from paginas.pagina_cadastro_edital import pagina_cadastro_edital
 
-# Constantes para nomes de chave do session_state
-USER_SESSION_KEY = 'user'
-AUTENTICADO_SESSION_KEY = 'autenticado'
-PAGINA_ATUAL_SESSION_KEY = 'pagina_atual'
-PROJETO_SELECIONADO_KEY = 'projeto_selecionado'
-TEXTO_PROJETO_KEY = 'texto_projeto'
-RESUMO_KEY = 'resumo'
-ORCAMENTO_KEY = 'orcamento'
-CRONOGRAMA_KEY = 'cronograma'
-OBJETIVOS_KEY = 'objetivos'
-JUSTIFICATIVA_KEY = 'justificativa'
-EDITAL_SELECIONADO_KEY = 'edital_selecionado'
+# Importar constantes
+from constants import (
+    USER_SESSION_KEY,
+    AUTENTICADO_SESSION_KEY,
+    PAGINA_ATUAL_SESSION_KEY,
+    PROJETO_SELECIONADO_KEY,
+    TEXTO_PROJETO_KEY,
+    RESUMO_KEY,
+    ORCAMENTO_KEY,
+    CRONOGRAMA_KEY,
+    OBJETIVOS_KEY,
+    JUSTIFICATIVA_KEY,
+    EDITAL_SELECIONADO_KEY
+)
 
 # Configuração da página Streamlit (deve ser a primeira chamada Streamlit NO SCRIPT PRINCIPAL)
 st.set_page_config(
