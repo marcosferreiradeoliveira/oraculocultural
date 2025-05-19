@@ -105,85 +105,95 @@ def initialize_firebase_app():
             FIREBASE_APP_INITIALIZED = False
             return False
 
-        firebase_config_raw = st.secrets["firebase_credentials"]
+        # Get raw credentials and convert to dictionary
+        raw_creds = st.secrets["firebase_credentials"]
+        print(f"DEBUG: Tipo do raw_creds: {type(raw_creds)}")
         
-        print(f"DEBUG Firebase Init: Tentando carregar de st.secrets['firebase_credentials']")
-        print(f"DEBUG Firebase Init: Tipo de firebase_config_raw: {type(firebase_config_raw)}")
-
-        firebase_config_dict = None
-        if isinstance(firebase_config_raw, str):
-            print(f"DEBUG Firebase Init: firebase_config_raw é uma string. Conteúdo (primeiros 200 chars): {firebase_config_raw[:200]}")
-            try:
-                firebase_config_dict = json.loads(firebase_config_raw)
-                print("DEBUG Firebase Init: String parseada como JSON com sucesso.")
-            except json.JSONDecodeError as json_err:
-                error_msg = f"ERRO: 'firebase_credentials' é uma string, mas falhou ao ser parseada como JSON: {json_err}"
-                print(error_msg)
-                FIREBASE_INIT_ERROR_MESSAGE = error_msg
-                FIREBASE_APP_INITIALIZED = False
-                return False
-        elif isinstance(firebase_config_raw, AttrDict): # Verifica se é AttrDict
-            print("DEBUG Firebase Init: firebase_config_raw é um AttrDict. Convertendo para dict...")
-            firebase_config_dict = dict(firebase_config_raw) # Converte para dict
-            print("DEBUG Firebase Init: AttrDict convertido para dict com sucesso.")
-        elif isinstance(firebase_config_raw, dict):
-            firebase_config_dict = firebase_config_raw
-            print("DEBUG Firebase Init: firebase_config_raw já é um dicionário padrão.")
+        # Convert to dictionary
+        if isinstance(raw_creds, AttrDict):
+            print("DEBUG: Convertendo AttrDict para dicionário...")
+            firebase_config_dict = {
+                'type': str(raw_creds.type),
+                'project_id': str(raw_creds.project_id),
+                'private_key_id': str(raw_creds.private_key_id),
+                'private_key': str(raw_creds.private_key),
+                'client_email': str(raw_creds.client_email),
+                'client_id': str(raw_creds.client_id),
+                'auth_uri': str(raw_creds.auth_uri),
+                'token_uri': str(raw_creds.token_uri),
+                'auth_provider_x509_cert_url': str(raw_creds.auth_provider_x509_cert_url),
+                'client_x509_cert_url': str(raw_creds.client_x509_cert_url),
+                'universe_domain': str(raw_creds.universe_domain)
+            }
+        elif isinstance(raw_creds, dict):
+            print("DEBUG: Usando dicionário diretamente...")
+            firebase_config_dict = raw_creds
         else:
-            error_msg = f"ERRO: 'firebase_credentials' não é nem string, nem AttrDict, nem dicionário padrão. Tipo encontrado: {type(firebase_config_raw)}"
+            error_msg = f"ERRO: Tipo de credencial não suportado: {type(raw_creds)}"
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
-        
-        # Agora firebase_config_dict DEVE ser um dicionário se chegamos aqui
-        print(f"DEBUG Firebase Init: Chaves disponíveis em firebase_config_dict: {list(firebase_config_dict.keys())}")
-        print(f"DEBUG Firebase Init: Valor de 'type': {firebase_config_dict.get('type')}")
-        print(f"DEBUG Firebase Init: Valor de 'project_id': {firebase_config_dict.get('project_id')}")
-        print(f"DEBUG Firebase Init: Chave 'private_key' existe? {'private_key' in firebase_config_dict}")
 
+        print("DEBUG: Verificando campos do dicionário...")
+        print(f"DEBUG: Chaves disponíveis: {list(firebase_config_dict.keys())}")
+        print(f"DEBUG: Tipo de credencial: {firebase_config_dict.get('type')}")
+        print(f"DEBUG: Project ID: {firebase_config_dict.get('project_id')}")
+
+        # Validate required fields
         required_fields = [
             'type', 'project_id', 'private_key_id', 'private_key',
             'client_email', 'client_id', 'auth_uri', 'token_uri',
             'auth_provider_x509_cert_url', 'client_x509_cert_url'
         ]
-        
+
         missing_fields = [field for field in required_fields if field not in firebase_config_dict]
         if missing_fields:
-            error_msg = f"ERRO: Campos obrigatórios ausentes no dicionário firebase_credentials: {', '.join(missing_fields)}"
+            error_msg = f"ERRO: Campos obrigatórios ausentes: {', '.join(missing_fields)}"
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
 
         if firebase_config_dict.get('type') != "service_account":
-            error_msg = f"ERRO: O valor da chave 'type' ({firebase_config_dict.get('type')}) em firebase_credentials não é 'service_account'."
+            error_msg = f"ERRO: Tipo de credencial inválido: {firebase_config_dict.get('type')}"
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
 
+        # Process private key
         private_key = firebase_config_dict.get('private_key', '')
-        private_key_processed = private_key.replace('\\n', '\n')
-
-        if not private_key_processed.startswith('-----BEGIN PRIVATE KEY-----') or not private_key_processed.strip().endswith('-----END PRIVATE KEY-----'):
-            error_msg = "ERRO: Formato inválido da chave privada. Deve incluir os marcadores BEGIN e END e estar corretamente formatada."
+        if not private_key:
+            error_msg = "ERRO: Chave privada não encontrada"
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
-        
+
+        # Clean up private key
+        private_key = private_key.replace('\\n', '\n').strip()
+        if not private_key.startswith('-----BEGIN PRIVATE KEY-----') or not private_key.endswith('-----END PRIVATE KEY-----'):
+            error_msg = "ERRO: Formato inválido da chave privada"
+            print(error_msg)
+            FIREBASE_INIT_ERROR_MESSAGE = error_msg
+            FIREBASE_APP_INITIALIZED = False
+            return False
+
+        # Update the private key in the config
+        firebase_config_dict['private_key'] = private_key
+
+        print("DEBUG: Tentando inicializar Firebase Admin com as credenciais...")
         cred = credentials.Certificate(firebase_config_dict)
         firebase_admin.initialize_app(cred)
-        print("INFO: Conexão com Firebase estabelecida usando st.secrets!") 
+        print("INFO: Firebase Admin inicializado com sucesso!")
         FIREBASE_APP_INITIALIZED = True
         return True
-            
+
     except Exception as e:
-        error_msg = f"ERRO GERAL EXCEPCIONAL ao inicializar Firebase Admin: {str(e)}"
+        error_msg = f"ERRO ao inicializar Firebase Admin: {str(e)}"
         print(error_msg)
-        import traceback
-        print(f"DEBUG Firebase Init: Traceback completo da exceção: {traceback.format_exc()}")
+        print("DEBUG: Stack trace:", traceback.format_exc())
         FIREBASE_INIT_ERROR_MESSAGE = error_msg
         FIREBASE_APP_INITIALIZED = False
         return False
