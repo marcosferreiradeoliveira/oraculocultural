@@ -14,24 +14,20 @@ FIREBASE_INITIALIZED_KEY = 'firebase_initialized'
 def initialize_firebase():
     """Inicializa o Firebase com cache para melhor performance"""
     try:
-        # Tenta encontrar o arquivo de credenciais em locais comuns
-        possible_paths = [
-            "config/firebase-service-account.json",
-            ".streamlit/firebase-service-account.json", 
-            "firebase-service-account.json"
-        ]
-        
-        cred_path = None
-        for path in possible_paths:
-            if os.path.exists(path):
-                cred_path = path
-                break
-        
-        if not cred_path:
-            st.error("Arquivo de credenciais do Firebase não encontrado")
+        if not hasattr(st, 'secrets'):
+            st.error("st.secrets não está disponível. Verifique se está rodando no Streamlit Cloud.")
             return False
-        
-        cred = credentials.Certificate(cred_path)
+
+        if "firebase_credentials" not in st.secrets:
+            st.error("'firebase_credentials' não encontrado em st.secrets. Verifique as configurações no Streamlit Cloud.")
+            return False
+
+        firebase_config_dict = st.secrets["firebase_credentials"]
+        if not isinstance(firebase_config_dict, dict) or not firebase_config_dict.get("type") == "service_account":
+            st.error("'firebase_credentials' em st.secrets não é um dicionário de conta de serviço válido.")
+            return False
+
+        cred = credentials.Certificate(firebase_config_dict)
         if not firebase_admin._apps:
             return firebase_admin.initialize_app(cred, name="streamlit_app")
         return firebase_admin.get_app()
