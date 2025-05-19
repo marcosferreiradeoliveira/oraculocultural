@@ -107,6 +107,8 @@ def initialize_firebase_app():
             return False
 
         firebase_config_dict = st.secrets["firebase_credentials"]
+        print("DEBUG: Tipo do firebase_config_dict:", type(firebase_config_dict))
+        print("DEBUG: Conteúdo do firebase_config_dict:", firebase_config_dict)
         
         # Validate required fields
         required_fields = [
@@ -124,14 +126,14 @@ def initialize_firebase_app():
             return False
 
         if not isinstance(firebase_config_dict, dict):
-            error_msg = "ERRO: 'firebase_credentials' deve ser um dicionário."
+            error_msg = f"ERRO: 'firebase_credentials' deve ser um dicionário, mas é {type(firebase_config_dict)}"
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
 
         if firebase_config_dict.get('type') != "service_account":
-            error_msg = "ERRO: O tipo de credencial deve ser 'service_account'."
+            error_msg = f"ERRO: O tipo de credencial deve ser 'service_account', mas é '{firebase_config_dict.get('type')}'"
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
