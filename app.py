@@ -92,12 +92,16 @@ def initialize_firebase_app():
         return True
 
     try:
+        print("DEBUG: Iniciando verificação do st.secrets...")
         if not hasattr(st, 'secrets'):
             error_msg = "ERRO: st.secrets não está disponível. Verifique se está rodando no Streamlit Cloud."
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
+
+        print("DEBUG: st.secrets disponível. Verificando chaves...")
+        print("DEBUG: Chaves disponíveis em st.secrets:", list(st.secrets.keys()))
 
         if "firebase_credentials" not in st.secrets:
             error_msg = "ERRO: 'firebase_credentials' não encontrado em st.secrets. Verifique as configurações no Streamlit Cloud."
@@ -106,27 +110,11 @@ def initialize_firebase_app():
             FIREBASE_APP_INITIALIZED = False
             return False
 
-        # Get the raw credentials from secrets
-        raw_creds = st.secrets["firebase_credentials"]
-        print("DEBUG: Tipo do raw_creds:", type(raw_creds))
-        print("DEBUG: Conteúdo do raw_creds:", raw_creds)
-
-        # Convert to dictionary if it's not already
-        if isinstance(raw_creds, str):
-            try:
-                import json
-                firebase_config_dict = json.loads(raw_creds)
-            except json.JSONDecodeError:
-                error_msg = "ERRO: Não foi possível converter as credenciais para um dicionário."
-                print(error_msg)
-                FIREBASE_INIT_ERROR_MESSAGE = error_msg
-                FIREBASE_APP_INITIALIZED = False
-                return False
-        else:
-            firebase_config_dict = raw_creds
-
-        print("DEBUG: Tipo do firebase_config_dict após conversão:", type(firebase_config_dict))
-        print("DEBUG: Conteúdo do firebase_config_dict após conversão:", firebase_config_dict)
+        # Get the credentials from secrets
+        print("DEBUG: Obtendo firebase_credentials de st.secrets...")
+        firebase_config_dict = st.secrets["firebase_credentials"]
+        print("DEBUG: Tipo do firebase_config_dict:", type(firebase_config_dict))
+        print("DEBUG: Chaves disponíveis em firebase_config_dict:", list(firebase_config_dict.keys()) if isinstance(firebase_config_dict, dict) else "Não é um dicionário")
         
         # Validate required fields
         required_fields = [
@@ -135,6 +123,7 @@ def initialize_firebase_app():
             'auth_provider_x509_cert_url', 'client_x509_cert_url'
         ]
         
+        print("DEBUG: Verificando campos obrigatórios...")
         missing_fields = [field for field in required_fields if field not in firebase_config_dict]
         if missing_fields:
             error_msg = f"ERRO: Campos obrigatórios ausentes nas credenciais do Firebase: {', '.join(missing_fields)}"
@@ -150,6 +139,7 @@ def initialize_firebase_app():
             FIREBASE_APP_INITIALIZED = False
             return False
 
+        print("DEBUG: Verificando tipo de credencial...")
         if firebase_config_dict.get('type') != "service_account":
             error_msg = f"ERRO: O tipo de credencial deve ser 'service_account', mas é '{firebase_config_dict.get('type')}'"
             print(error_msg)
@@ -157,7 +147,7 @@ def initialize_firebase_app():
             FIREBASE_APP_INITIALIZED = False
             return False
 
-        # Validate private key format
+        print("DEBUG: Verificando formato da chave privada...")
         private_key = firebase_config_dict.get('private_key', '')
         if not private_key.startswith('-----BEGIN PRIVATE KEY-----') or not private_key.endswith('-----END PRIVATE KEY-----'):
             error_msg = "ERRO: Formato inválido da chave privada. Deve incluir os marcadores BEGIN e END."
@@ -166,6 +156,7 @@ def initialize_firebase_app():
             FIREBASE_APP_INITIALIZED = False
             return False
 
+        print("DEBUG: Tentando inicializar Firebase Admin...")
         cred = credentials.Certificate(firebase_config_dict)
         firebase_admin.initialize_app(cred)
         print("INFO: Conexão com Firebase estabelecida usando st.secrets!") 
@@ -175,6 +166,7 @@ def initialize_firebase_app():
     except Exception as e:
         error_msg = f"ERRO GERAL ao inicializar Firebase Admin: {str(e)}"
         print(error_msg)
+        print("DEBUG: Stack trace completo:", e.__traceback__)
         FIREBASE_INIT_ERROR_MESSAGE = error_msg
         FIREBASE_APP_INITIALIZED = False
         return False
