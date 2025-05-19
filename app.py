@@ -1,3 +1,5 @@
+import streamlit as st
+
 # Configuração da página Streamlit (deve ser a primeira chamada Streamlit NO SCRIPT PRINCIPAL)
 st.set_page_config(
     page_title="Oráculo Cultural",
@@ -14,7 +16,6 @@ st.set_page_config(
 import tempfile
 from langchain_openai import ChatOpenAI
 import os
-import streamlit as st
 from dotenv import load_dotenv # Para carregar variáveis de .env
 import firebase_admin
 from firebase_admin import credentials, firestore
