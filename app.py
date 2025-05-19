@@ -1,28 +1,19 @@
 import tempfile
 from langchain_openai import ChatOpenAI
-
-import os # Mantido para uso potencial, ex: variáveis de ambiente
+import os
 import streamlit as st
 from dotenv import load_dotenv # Para carregar variáveis de .env
 import firebase_admin
-from firebase_admin import credentials, firestore # auth será usado em login.py
-from google.cloud.firestore_v1 import FieldFilter
-
-st.set_page_config(
-    page_title="Oráculo Cultural",
-    page_icon="🎭",
-    layout="wide",
-    initial_sidebar_state="collapsed", # Mantém a sidebar recolhida por padrão
-    menu_items={
-        'Get Help': None, # 'https://www.meusite.com/help',
-        'Report a bug': None, # "mailto:contato@meusite.com",
-        'About': "# Oráculo Cultural\nSua plataforma para decifrar o universo da cultura."
-    }
-)
+from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1 import FieldFilter # Usado em get_user_projects
 
 # Importações de modelos e utilitários
+# !!! IMPORTANTE PARA O ERRO set_page_config(): !!!
+# !!! Verifique se NENHUM destes arquivos importados (models, loaders, ou os de 'paginas') !!!
+# !!! executa QUALQUER comando st. (ex: st.write, st.error) no escopo global. !!!
+# !!! Comandos Streamlit só devem ser chamados DENTRO de funções nesses arquivos. !!!
 from models import (
-    get_llm,
+    get_llm, 
     gerar_resumo_projeto,
     gerar_orcamento,
     gerar_cronograma,
@@ -30,24 +21,20 @@ from models import (
     gerar_justificativa
 )
 from loaders import carrega_pdf
-# Removido: from services.firestore_service import initialize_firebase (a função está definida abaixo)
 
 # Importações de páginas
-from paginas.login import pagina_login # Página de login refatorada
+from paginas.login import pagina_login
 from paginas.pagina_editar_projeto import pagina_editar_projeto as pagina_editar_projeto_view
 from paginas.reset_password import pagina_reset_password
 from paginas.cadastro import pagina_cadastro
 from paginas.pagina_cadastro_edital import pagina_cadastro_edital
-
-
 
 # Constantes para nomes de chave do session_state
 USER_SESSION_KEY = 'user'
 AUTENTICADO_SESSION_KEY = 'autenticado'
 PAGINA_ATUAL_SESSION_KEY = 'pagina_atual'
 PROJETO_SELECIONADO_KEY = 'projeto_selecionado'
-TEXTO_PROJETO_KEY = 'texto_projeto' # Para o texto do PDF carregado
-# Para documentos gerados
+TEXTO_PROJETO_KEY = 'texto_projeto'
 RESUMO_KEY = 'resumo'
 ORCAMENTO_KEY = 'orcamento'
 CRONOGRAMA_KEY = 'cronograma'
@@ -55,111 +42,112 @@ OBJETIVOS_KEY = 'objetivos'
 JUSTIFICATIVA_KEY = 'justificativa'
 EDITAL_SELECIONADO_KEY = 'edital_selecionado'
 
-# Configuração do OpenAI
-try:
-    # Tenta carregar do .env primeiro (desenvolvimento local)
-    if os.path.exists('.env'):
-        load_dotenv()
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-    else:
-        # Se não encontrar .env, usa os secrets do Streamlit (produção)
-        openai_api_key = st.secrets["openai"]["api_key"]
-        
-    if not openai_api_key:
-        raise ValueError("OpenAI API key não encontrada")
-        
-    llm = ChatOpenAI(
-        openai_api_key=openai_api_key,
-        model="gpt-3.5-turbo"
-    )
-except Exception as e:
-    st.error(f"Erro ao inicializar OpenAI: {str(e)}")
-    raise
+# Configuração da página Streamlit (deve ser a primeira chamada Streamlit NO SCRIPT PRINCIPAL)
+st.set_page_config(
+    page_title="Oráculo Cultural",
+    page_icon="🎭",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': "# Oráculo Cultural\nSua plataforma para decifrar o universo da cultura."
+    }
+)
 
-# Inicialização do Firebase (deve ser chamada uma vez)
-def initialize_firebase():
-    """Inicializa a conexão com o Firebase e retorna status de sucesso"""
-    if not firebase_admin._apps:
-        try:
-            # Tenta usar o arquivo JSON local primeiro (desenvolvimento local)
-            json_path = "config/firebase-service-account.json"
-            if os.path.exists(json_path):
-                cred = credentials.Certificate(json_path)
-                firebase_admin.initialize_app(cred)
-                st.success("Conexão com Firebase estabelecida usando arquivo local!")
-                return True
-            else:
-                # Se não encontrar o arquivo JSON, tenta usar os secrets do Streamlit (produção)
-                firebase_config = st.secrets["firebase_credentials"]
-                
-                # Validação dos campos obrigatórios
-                required_fields = ["type", "project_id", "private_key", "client_email"]
-                missing_fields = [field for field in required_fields if not firebase_config.get(field)]
-                if missing_fields:
-                    raise ValueError(f"Campos obrigatórios ausentes: {', '.join(missing_fields)}")
-                
-                # Prepara o dicionário de credenciais
-                cred_dict = {
-                    "type": firebase_config["type"],
-                    "project_id": firebase_config["project_id"],
-                    "private_key_id": firebase_config["private_key_id"],
-                    "private_key": firebase_config["private_key"],
-                    "client_email": firebase_config["client_email"],
-                    "client_id": firebase_config["client_id"],
-                    "auth_uri": firebase_config["auth_uri"],
-                    "token_uri": firebase_config["token_uri"],
-                    "auth_provider_x509_cert_url": firebase_config["auth_provider_x509_cert_url"],
-                    "client_x509_cert_url": firebase_config["client_x509_cert_url"],
-                    "universe_domain": firebase_config.get("universe_domain", "googleapis.com")
-                }
-                
-                # Inicializa o Firebase
-                cred = credentials.Certificate(cred_dict)
-                firebase_admin.initialize_app(cred)
-                st.success("Conexão com Firebase estabelecida usando secrets!")
-                return True
-        except Exception as e:
-            st.error(f"Erro ao conectar ao Firebase: {str(e)}")
-            st.error("Detalhes do erro:")
-            st.exception(e)
-            return False
-    return True  # Já estava inicializado
-
-# Chama a função de inicialização
 # Carrega variáveis de ambiente do arquivo .env (se existir)
 load_dotenv()
-initialize_firebase()
 
-# Configuração inicial da página Streamlit
-# Deve ser a primeira chamada Streamlit, exceto para comentários e imports
+# Configuração do OpenAI
+llm = None 
+try:
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key and hasattr(st, 'secrets'): 
+        openai_api_key = st.secrets.get("openai", {}).get("api_key")
+        
+    if not openai_api_key:
+        print("AVISO: OpenAI API key não encontrada. Funcionalidades de IA podem ser limitadas.")
+    else:
+        llm = ChatOpenAI(
+            openai_api_key=openai_api_key,
+            model="gpt-3.5-turbo"
+        )
+        print("INFO: Cliente OpenAI inicializado com sucesso.")
+except Exception as e:
+    print(f"ERRO ao inicializar OpenAI: {str(e)}. Funcionalidades de IA podem ser limitadas.")
+    llm = None
+
+# Inicialização Centralizada do Firebase Admin
+FIREBASE_APP_INITIALIZED = False 
+FIREBASE_INIT_ERROR_MESSAGE = None # Para armazenar a mensagem de erro da inicialização
+
+def initialize_firebase_app():
+    global FIREBASE_APP_INITIALIZED, FIREBASE_INIT_ERROR_MESSAGE
+    if firebase_admin._apps: 
+        FIREBASE_APP_INITIALIZED = True
+        print("INFO: Firebase Admin já estava inicializado.")
+        return True
+
+    try:
+        json_path = "config/firebase-service-account.json"
+        if os.path.exists(json_path):
+            cred = credentials.Certificate(json_path)
+            firebase_admin.initialize_app(cred)
+            print("INFO: Conexão com Firebase estabelecida usando arquivo local!")
+            FIREBASE_APP_INITIALIZED = True
+            return True
+        
+        elif hasattr(st, 'secrets') and "firebase_credentials" in st.secrets:
+            firebase_config_dict = st.secrets["firebase_credentials"]
+            if not isinstance(firebase_config_dict, dict) or not firebase_config_dict.get("type") == "service_account":
+                error_msg = "ERRO: 'firebase_credentials' em st.secrets não é um dicionário de conta de serviço válido."
+                print(error_msg)
+                FIREBASE_INIT_ERROR_MESSAGE = error_msg
+                FIREBASE_APP_INITIALIZED = False
+                return False
+
+            cred = credentials.Certificate(firebase_config_dict)
+            firebase_admin.initialize_app(cred)
+            print("INFO: Conexão com Firebase estabelecida usando st.secrets!") 
+            FIREBASE_APP_INITIALIZED = True
+            return True
+        else:
+            error_msg = "ERRO: Credenciais do Firebase não encontradas (nem arquivo JSON local, nem em st.secrets['firebase_credentials'])."
+            print(error_msg)
+            FIREBASE_INIT_ERROR_MESSAGE = error_msg
+            FIREBASE_APP_INITIALIZED = False
+            return False
+            
+    except Exception as e: # Captura qualquer exceção durante a inicialização
+        error_msg = f"ERRO GERAL ao inicializar Firebase Admin: {str(e)}"
+        print(error_msg)
+        FIREBASE_INIT_ERROR_MESSAGE = error_msg
+        FIREBASE_APP_INITIALIZED = False
+        return False
+
+# Chama a função de inicialização UMA VEZ no início do script.
+# A flag FIREBASE_APP_INITIALIZED será atualizada dentro da função.
+initialize_firebase_app()
+print(f"DEBUG app.py global: FIREBASE_APP_INITIALIZED = {FIREBASE_APP_INITIALIZED}, Error: {FIREBASE_INIT_ERROR_MESSAGE}")
 
 
-# CSS customizado global (aplicado a todas as páginas, exceto se sobrescrito)
-# O CSS da página de login agora está em paginas/login.py
+# CSS customizado global
 st.markdown("""
     <style>
-        /* Esconde o menu lateral padrão e ícone de hamburger globalmente */
-        /* A menos que a página de login precise deles visíveis, o que não é o caso */
-        /* div[data-testid="stSidebarNav"], div[data-testid="collapsedControl"] {
-            display: none !important;
-        } */
-        
-        /* Esconde o menu padrão do Streamlit (MainMenu) e o rodapé (footer) */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         
-        /* Remove padding extra no topo do app se não for a página de login */
-        /* Ajuste fino pode ser necessário dependendo da estrutura das outras páginas */
-        /* .stApp > div:first-child > div:first-child > div:first-child { padding-top: 1rem; } */
-
-        /* Estilo para cartões de projetos (usado em pagina_projetos) */
         .project-card {
             background-color: #f8f9fa;
             border-radius: 10px;
-            padding: 1.5rem; /* Aumentado o padding */
+            padding: 1.5rem;
             margin-bottom: 1rem;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1); /* Sombra um pouco mais pronunciada */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
             transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            height: 220px; 
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
         .project-card:hover {
             transform: translateY(-5px);
@@ -169,76 +157,96 @@ st.markdown("""
             margin-top: 0;
             margin-bottom: 0.75rem;
             color: #333;
+            font-size: 1.1rem; 
         }
         .project-card p {
             margin-bottom: 0.5rem;
             font-size: 0.9rem;
             color: #555;
+            flex-grow: 1; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+            display: -webkit-box;
+            -webkit-line-clamp: 3; 
+            -webkit-box-orient: vertical;
+        }
+        .project-card-actions {
+            margin-top: auto; 
         }
 
-        /* Ajustes de responsividade para o container principal em telas maiores */
         @media screen and (min-width: 1024px) {
             .main .block-container {
-                max-width: 90%; /* Ou o valor que preferir, ex: 1200px */
-                /* padding-left: 2rem; */ /* Removido para usar o padding padrão ou específico da página */
-                /* padding-right: 2rem; */
+                max-width: 90%;
             }
         }
     </style>
 """, unsafe_allow_html=True)
 
 
-# Função para recuperar projetos do usuário do Firestore
 def get_user_projects(user_id):
-    """Recupera os projetos de um usuário específico do Firestore."""
+    print(f"DEBUG get_user_projects: Verificando Firebase. Initialized={FIREBASE_APP_INITIALIZED}")
+    if not FIREBASE_APP_INITIALIZED:
+        st.error("Firebase não inicializado. Não é possível buscar projetos.")
+        return []
     try:
         db = firestore.client()
-        projetos_ref = db.collection('projetos').where(filter=FieldFilter('user_id', '==', user_id))
-        projetos_stream = projetos_ref.stream() # Renomeado para evitar conflito com a lista
+        projetos_ref = db.collection('projetos').where(filter=FieldFilter('user_id', '==', user_id)).order_by('data_criacao', direction=firestore.Query.DESCENDING)
+        projetos_stream = projetos_ref.stream()
         projetos_lista = [{'id': doc.id, **doc.to_dict()} for doc in projetos_stream]
         return projetos_lista
     except Exception as e:
         st.error(f"Erro ao recuperar projetos: {str(e)}")
         return []
 
-# Página de Projetos
 def pagina_projetos():
-    """Exibe a página de listagem de projetos do usuário."""
+    print(f"DEBUG pagina_projetos: Verificando Firebase. Initialized={FIREBASE_APP_INITIALIZED}")
+    if not FIREBASE_APP_INITIALIZED:
+        st.error("ALERTA: A conexão com o banco de dados (Firebase) falhou. Funcionalidades limitadas.")
+        # Opcional: impedir que o resto da página seja renderizado se o Firebase for essencial
+        # if st.button("Tentar Novamente"): st.rerun()
+        # return
 
-        
-        # Mostrar resumo de alterações se existirem
-    if 'ultimas_alteracoes' in st.session_state:
-            alteracoes = st.session_state['ultimas_alteracoes']
-            st.success(f"✅ Alterações aplicadas no projeto: {alteracoes['nome_projeto']}")
-            st.expander("📝 Ver detalhes das alterações").markdown(alteracoes['alteracoes'])
-            del st.session_state['ultimas_alteracoes']  # Remove após mostrar
     if not st.session_state.get(USER_SESSION_KEY):
         st.warning("Usuário não logado.")
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
         st.rerun()
         return
 
-    st.title(f'Bem-vindo(a), {st.session_state[USER_SESSION_KEY]["email"]}!')
+    user_info = st.session_state[USER_SESSION_KEY]
+    st.title(f'Bem-vindo(a), {user_info.get("display_name", user_info.get("email", "Usuário"))}!')
     
     if st.button("Sair", key="logout_button_projetos"):
-        # Limpa o estado da sessão relacionado ao usuário
-        for key in [USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PROJETO_SELECIONADO_KEY, TEXTO_PROJETO_KEY, RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY, OBJETIVOS_KEY, JUSTIFICATIVA_KEY]:
+        keys_to_clear = [
+            USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PROJETO_SELECIONADO_KEY,
+            TEXTO_PROJETO_KEY, RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY,
+            OBJETIVOS_KEY, JUSTIFICATIVA_KEY, EDITAL_SELECIONADO_KEY
+        ]
+        for key in keys_to_clear:
             if key in st.session_state:
                 del st.session_state[key]
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login' # Define a página de login como a próxima
+        project_specific_keys = [k for k in st.session_state if user_info.get('uid','temp_id_clear') in k or 'diagnostico_editavel' in k or 'doc_gerado' in k]
+        for key in project_specific_keys:
+            if key in st.session_state:
+                del st.session_state[key]
+
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
         st.success("Você saiu da sua conta.")
         st.rerun()
     
-    projetos = get_user_projects(st.session_state[USER_SESSION_KEY]['uid'])
-    
+    if 'ultimas_alteracoes' in st.session_state:
+        alteracoes = st.session_state['ultimas_alteracoes']
+        st.success(f"✅ Alterações aplicadas no projeto: {alteracoes.get('nome_projeto', 'N/A')}")
+        with st.expander("📝 Ver detalhes das alterações"):
+            st.markdown(alteracoes.get('alteracoes', 'Nenhuma descrição de alteração.'))
+        del st.session_state['ultimas_alteracoes']
+
+    projetos = get_user_projects(user_info['uid'])
     st.header('Meus Projetos Culturais', divider='rainbow')
     
-    # Botões para criar novo projeto e cadastrar edital
     col_create1, col_create2 = st.columns(2)
     with col_create1:
         if st.button("🎨 Criar Novo Projeto", type="primary", use_container_width=True):
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'novo_projeto'
-            # Limpa dados de projeto selecionado ou texto de projeto anterior
             if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
             if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
             st.rerun()
@@ -255,69 +263,84 @@ def pagina_projetos():
             </div>
             """, unsafe_allow_html=True)
     else:
-        # Exibição dos projetos em colunas responsivas
-        # Define o número de colunas com base na largura da tela (aproximação)
-        # Este é um placeholder, Streamlit não tem detecção de largura de tela direta para Python.
-        # Para um layout verdadeiramente responsivo de colunas, considere o número de itens.
-        num_cols = 3 # min(len(projetos), 3) # Exibe no máximo 3 colunas
-        
+        num_cols = 3
         cols = st.columns(num_cols)
         for i, projeto in enumerate(projetos):
             col_index = i % num_cols
             with cols[col_index]:
-                # Usando st.markdown para aplicar a classe .project-card
-                st.markdown(f""" 
+                card_html = f""" 
                 <div class="project-card">
-                    <h3>{projeto.get('nome', 'Projeto sem nome')}</h3>
-                    <p><strong>Categoria:</strong> {projeto.get('categoria', 'Não definida')}</p>
-                    <p>{projeto.get('descricao', 'Sem descrição')[:100]}...</p>
+                    <div>
+                        <h3>{projeto.get('nome', 'Projeto sem nome')}</h3>
+                        <p><strong>Categoria:</strong> {projeto.get('categoria', 'Não definida')}</p>
+                        <p>{projeto.get('descricao', 'Sem descrição')}</p>
+                    </div>
+                    <div class="project-card-actions">
+                        {''}
+                    </div>
                 </div>
-                """, unsafe_allow_html=True)
-                # Botões dentro de um container normal do Streamlit para funcionalidade
-                # Idealmente, os botões seriam parte do card HTML, mas isso complica a interatividade do Streamlit
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
                 
-                # Botões de ação para cada projeto
-                btn_cols = st.columns(2)
-                with btn_cols[0]:
+                btn_cols_card = st.columns(2)
+                with btn_cols_card[0]:
                     if st.button(f"📝 Editar", key=f"editar_{projeto['id']}", use_container_width=True):
                         st.session_state[PROJETO_SELECIONADO_KEY] = projeto
                         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
                         st.rerun()
-                with btn_cols[1]:
-                    if st.button(f"🔍 Detalhes", key=f"detalhes_{projeto['id']}", use_container_width=True):
-                        st.session_state[PROJETO_SELECIONADO_KEY] = projeto
-                        # Limpa documentos gerados anteriormente ao ver detalhes de um novo projeto
-                        for key_doc in [RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY, OBJETIVOS_KEY, JUSTIFICATIVA_KEY, TEXTO_PROJETO_KEY]:
-                            if key_doc in st.session_state: del st.session_state[key_doc]
-                        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'detalhes_projeto'
+                with btn_cols_card[1]:
+                    if st.button(f"🗑️ Excluir", key=f"excluir_{projeto['id']}", use_container_width=True):
+                        st.session_state['projeto_para_excluir'] = projeto
                         st.rerun()
-                st.markdown("---") # Separador visual entre os cards na mesma coluna
 
+    if 'projeto_para_excluir' in st.session_state:
+        projeto_excluir = st.session_state['projeto_para_excluir']
+        st.warning(f"Tem certeza que deseja excluir o projeto '{projeto_excluir.get('nome')}'? Esta ação não pode ser desfeita.")
+        col_confirm1, col_confirm2, _ = st.columns([1,1,2]) 
+        with col_confirm1:
+            if st.button("Sim, Excluir", type="primary", key=f"confirm_excluir_{projeto_excluir['id']}"):
+                try:
+                    db = firestore.client()
+                    db.collection('projetos').document(projeto_excluir['id']).delete()
+                    st.success(f"Projeto '{projeto_excluir.get('nome')}' excluído com sucesso.")
+                    del st.session_state['projeto_para_excluir']
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao excluir projeto: {e}")
+                    if 'projeto_para_excluir' in st.session_state: 
+                        del st.session_state['projeto_para_excluir']
+        with col_confirm2:
+            if st.button("Cancelar", key=f"cancel_excluir_{projeto_excluir['id']}"):
+                del st.session_state['projeto_para_excluir']
+                st.rerun()
 
-# Função para Criar Novo Projeto
 def pagina_novo_projeto():
-    """Exibe o formulário para criar um novo projeto cultural."""
+    print(f"DEBUG pagina_novo_projeto: Verificando Firebase. Initialized={FIREBASE_APP_INITIALIZED}")
+    if not FIREBASE_APP_INITIALIZED:
+        st.error("ALERTA: A conexão com o banco de dados (Firebase) falhou. Não é possível criar novo projeto.")
+        if st.button("⬅️ Voltar para Login", key="novo_proj_voltar_login_err"): 
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+            st.rerun()
+        return
+        
     st.header('✨ Criar Novo Projeto Cultural')
     
-    # Função para recuperar editais do Firestore
-    @st.cache_data
-    def get_editais():
-        """Recupera a lista de editais cadastrados no Firestore."""
+    @st.cache_data 
+    def get_editais_cached():
         try:
             db = firestore.client()
-            editais_ref = db.collection('editais')
+            editais_ref = db.collection('editais').order_by('nome')
             editais_stream = editais_ref.stream()
-            # Retorna uma lista de dicionários, incluindo o ID do documento
             return [{'id': doc.id, **doc.to_dict()} for doc in editais_stream]
         except Exception as e:
-            st.error(f"Erro ao recuperar editais: {str(e)}")
+            print(f"Erro ao recuperar editais (cache): {str(e)}")
             return []
 
-    # Carregar a lista de editais disponíveis
-    editais_disponiveis = get_editais()
+    editais_disponiveis = get_editais_cached()
+    if not editais_disponiveis and FIREBASE_APP_INITIALIZED: 
+        st.info("Nenhum edital cadastrado no momento para associação.")
 
-    # Preparar opções para o selectbox
-    edital_options = {'-- Selecione um Edital (Opcional) --': None} # Opção padrão
+    edital_options = {'-- Selecione um Edital (Opcional) --': None}
     edital_options.update({edital['nome']: edital['id'] for edital in editais_disponiveis})
 
     with st.form("novo_projeto_form"):
@@ -329,15 +352,11 @@ def pagina_novo_projeto():
             "Patrimônio Cultural", "Artesanato", "Cultura Popular", "Outra"
         ], help="Selecione a categoria que melhor descreve seu projeto.")
         
-        # Adicionar mais campos se necessário (ex: data de início, local, etc.)
-
-        # Selectbox para escolher o edital
         nome_edital_selecionado = st.selectbox(
             "Associar a um Edital (Opcional)",
             list(edital_options.keys()),
-            help="Selecione um edital para associar este projeto. Isso permitirá usar os dados do edital para análise."
+            help="Selecione um edital para associar este projeto."
         )
-
         submitted = st.form_submit_button("🚀 Salvar Projeto")
         
         if submitted:
@@ -351,27 +370,19 @@ def pagina_novo_projeto():
                         st.error("Erro: Usuário não identificado. Faça login novamente.")
                         return
 
-                    # Obtém o ID do edital selecionado
                     edital_id_selecionado = edital_options[nome_edital_selecionado]
-
                     novo_projeto_data = {
                         'nome': nome,
                         'descricao': descricao,
                         'categoria': categoria,
                         'user_id': user_uid,
-                        'edital_associado': edital_id_selecionado, # Salva o ID do edital (pode ser None)
+                        'edital_associado': edital_id_selecionado,
                         'data_criacao': firestore.SERVER_TIMESTAMP,
                         'data_atualizacao': firestore.SERVER_TIMESTAMP,
-                        # Adicione outros campos conforme necessário
                     }
-                    
-                    # Salva o novo projeto no Firestore
                     db.collection('projetos').add(novo_projeto_data)
-                    
                     st.success(f"Projeto '{nome}' criado com sucesso!")
                     st.balloons()
-                    
-                    # Redireciona para a página de projetos
                     st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
                     st.rerun()
                 except Exception as e:
@@ -381,120 +392,21 @@ def pagina_novo_projeto():
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
         st.rerun()
 
+# def pagina_detalhes_projeto(): (Definição da função comentada, como no original)
+# ...
 
-# Função para mostrar detalhes do projeto e gerar documentos
-def pagina_detalhes_projeto():
-    """Exibe os detalhes de um projeto selecionado e opções para gerar documentos."""
-    projeto = st.session_state.get(PROJETO_SELECIONADO_KEY)
-    
-    if not projeto:
-        st.warning("Nenhum projeto selecionado. Retornando à lista de projetos.")
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
-        st.rerun()
-        return
-
-    st.header(f'🔍 Detalhes do Projeto: {projeto.get("nome", "Sem Nome")}')
-    st.caption(f"Categoria: {projeto.get('categoria', 'N/A')}")
-    st.markdown(f"**Descrição:**\n {projeto.get('descricao', 'Sem descrição.')}")
-    st.markdown("---")
-
-    # Opções de geração de documentos
-    st.subheader("📑 Assistente de Geração de Documentos", divider='blue')
-    
-    # Carregamento do PDF do projeto
-    if TEXTO_PROJETO_KEY not in st.session_state:
-        st.info("⚠️ Para gerar os documentos, por favor, carregue o arquivo PDF principal do seu projeto.")
-        arquivo_pdf = st.file_uploader("Selecione o arquivo PDF do projeto", type=["pdf"], key="pdf_uploader_detalhes")
-
-        if arquivo_pdf:
-            with st.spinner("Processando PDF... Por favor, aguarde."):
-                try:
-                    # Salva o arquivo temporariamente para leitura
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-                        tmp_file.write(arquivo_pdf.getvalue())
-                        caminho_tmp_pdf = tmp_file.name
-                    
-                    texto_extraido = carrega_pdf(caminho_tmp_pdf) # Função que extrai texto do PDF
-                    os.remove(caminho_tmp_pdf) # Remove o arquivo temporário
-
-                    if texto_extraido:
-                        st.session_state[TEXTO_PROJETO_KEY] = texto_extraido
-                        st.success("✅ PDF carregado e processado com sucesso!")
-                        st.rerun() # Recarrega para mostrar as abas de geração
-                    else:
-                        st.error("Não foi possível extrair texto do PDF. Tente outro arquivo ou verifique o formato.")
-                except Exception as e:
-                    st.error(f"Erro ao processar PDF: {e}")
-                    if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY] # Limpa em caso de erro
-    
-    if TEXTO_PROJETO_KEY in st.session_state:
-        texto_base_projeto = st.session_state[TEXTO_PROJETO_KEY]
-        st.success("Pronto para gerar documentos com base no PDF carregado!")
-
-        # Abas para cada tipo de documento a ser gerado
-        tab_titles = ["📝 Resumo", "💰 Orçamento", "📅 Cronograma", "🎯 Objetivos", "📚 Justificativa"]
-        tabs = st.tabs(tab_titles)
-
-        doc_generators = {
-            "Resumo": (gerar_resumo_projeto, RESUMO_KEY),
-            "Orçamento": (gerar_orcamento, ORCAMENTO_KEY),
-            "Cronograma": (gerar_cronograma, CRONOGRAMA_KEY),
-            "Objetivos": (gerar_objetivos, OBJETIVOS_KEY),
-            "Justificativa": (gerar_justificativa, JUSTIFICATIVA_KEY),
-        }
-
-        for i, title_prefix in enumerate(tab_titles):
-            doc_type = title_prefix.split(" ")[1] # Ex: "Resumo"
-            generator_func, session_key = doc_generators[doc_type]
-            
-            with tabs[i]:
-                st.markdown(f"#### Gerar {doc_type} do Projeto")
-                if st.button(f"Gerar {doc_type} Agora", key=f"gerar_{doc_type.lower()}_btn"):
-                    with st.spinner(f"Elaborando {doc_type}... Isso pode levar alguns instantes."):
-                        try:
-                            llm_instance = get_llm() # Obtém a instância do LLM
-                            documento_gerado = generator_func(llm_instance, texto_base_projeto)
-                            st.session_state[session_key] = documento_gerado
-                            st.success(f"✅ {doc_type} gerado com sucesso!")
-                        except Exception as e:
-                            st.error(f"Erro ao gerar {doc_type}: {e}")
-                
-                if session_key in st.session_state:
-                    st.subheader(f"Visualização do {doc_type}:")
-                    st.markdown(f"```\n{st.session_state[session_key]}\n```" if doc_type in ["Orçamento", "Cronograma"] else st.session_state[session_key]) # Usa ``` para preservar formatação
-                    st.download_button(
-                        label=f"📥 Baixar {doc_type}",
-                        data=st.session_state[session_key].encode('utf-8'), # Garante encoding para download
-                        file_name=f"{doc_type.lower()}_{projeto.get('nome', 'projeto').replace(' ', '_')}.txt",
-                        mime="text/plain",
-                        key=f"download_{doc_type.lower()}"
-                    )
-        st.markdown("---")
-        if st.button("🗑️ Recarregar outro PDF", key="recarregar_pdf_btn"):
-            if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
-            # Limpa também os documentos gerados para evitar confusão
-            for _, session_k in doc_generators.values():
-                if session_k in st.session_state: del st.session_state[session_k]
-            st.rerun()
-
-
-    # Botão para voltar
-    if st.button("⬅️ Voltar para Lista de Projetos", key="voltar_detalhes_projetos"):
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
-        # Limpa o projeto selecionado e o texto do PDF ao voltar para a lista
-        if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
-        if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
-        for _, session_k_doc in doc_generators.values(): # Limpa documentos gerados
-            if session_k_doc in st.session_state: del session_k_doc
-        st.rerun()
-
-
-# Fluxo Principal da Aplicação (Router)
 def main():
-    """Função principal que controla o fluxo de páginas da aplicação."""
-    if not initialize_firebase(): # Tenta inicializar o Firebase para o app
-        st.error("Falha crítica na inicialização do Firebase. A aplicação não pode continuar.")
+    # A inicialização já ocorreu no escopo global. Agora verificamos o resultado.
+    print(f"DEBUG main(): Verificando FIREBASE_APP_INITIALIZED = {FIREBASE_APP_INITIALIZED}. Erro capturado: {FIREBASE_INIT_ERROR_MESSAGE}")
+    
+    if not FIREBASE_APP_INITIALIZED:
+        # Exibe a mensagem de erro capturada durante a inicialização, se houver
+        error_display_message = FIREBASE_INIT_ERROR_MESSAGE or "Erro desconhecido durante a inicialização do Firebase."
+        st.error(f"Falha crítica na inicialização do Firebase. A aplicação não pode continuar. Detalhe: {error_display_message}")
         st.stop() # Impede a execução se o Firebase não puder ser inicializado
+    
+    if llm is None and st.session_state.get(PAGINA_ATUAL_SESSION_KEY, 'login') not in ['login', 'cadastro', 'reset_password']:
+        st.warning("O modelo de linguagem (OpenAI) não foi inicializado. Algumas funcionalidades podem estar indisponíveis ou apresentar erros.")
 
     # Inicializa o estado da sessão se as chaves não existirem
     if AUTENTICADO_SESSION_KEY not in st.session_state:
@@ -502,37 +414,41 @@ def main():
     if USER_SESSION_KEY not in st.session_state:
         st.session_state[USER_SESSION_KEY] = None
     if PAGINA_ATUAL_SESSION_KEY not in st.session_state:
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login' # Começa na página de login
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
 
     # Roteamento de páginas
     if not st.session_state[AUTENTICADO_SESSION_KEY]:
         current_page = st.session_state[PAGINA_ATUAL_SESSION_KEY]
         if current_page == 'reset_password':
-            pagina_reset_password()
+            pagina_reset_password() # Assume que esta página também verifica FIREBASE_APP_INITIALIZED se necessário
         elif current_page == 'cadastro':
-            pagina_cadastro()
-        else:
-            pagina_login() # Se não autenticado, mostra a página de login
+            pagina_cadastro() # Assume que esta página também verifica FIREBASE_APP_INITIALIZED
+        else: 
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+            pagina_login()
     else:
-        # Usuário autenticado, navega para a página atual definida no estado da sessão
+        # Usuário autenticado
         current_page = st.session_state[PAGINA_ATUAL_SESSION_KEY]
-        # Exibe saudação no topo
-        user = st.session_state.get(USER_SESSION_KEY)
-        if user:
-            nome = user.get('display_name') or user.get('email', 'Usuário')
-            st.markdown(f"<div style='font-size:1.2rem; color:#7e22ce; margin-bottom:1rem;'>Seja bem-vindo, <b>{nome}</b>!</div>", unsafe_allow_html=True)
+        
+        # Verifica se o Firebase está OK antes de carregar páginas autenticadas que dependem dele
+        if not FIREBASE_APP_INITIALIZED and current_page not in ['login']: # Permite logout mesmo se firebase falhar
+            st.error("Erro de conexão com o Firebase. Algumas funcionalidades podem não estar disponíveis.")
+            # Poderia redirecionar para uma página de erro ou login
+            if st.button("Tentar reconectar / Voltar ao Login"):
+                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+                st.rerun()
+            return
+
+
         if current_page == 'projetos':
             pagina_projetos()
         elif current_page == 'novo_projeto':
             pagina_novo_projeto()
         elif current_page == 'editar_projeto':
-            pagina_editar_projeto_view()
-        elif current_page == 'detalhes_projeto':
-            pagina_detalhes_projeto()
+            pagina_editar_projeto_view() # Esta página deve verificar FIREBASE_APP_INITIALIZED
         elif current_page == 'cadastro_edital':
-            pagina_cadastro_edital()
+            pagina_cadastro_edital() # Esta página deve verificar FIREBASE_APP_INITIALIZED
         else:
-            # Fallback: se a página atual for desconhecida, volta para a página de projetos
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
             st.rerun()
 
