@@ -115,7 +115,6 @@ def pagina_editar_projeto():
             st.session_state[f'current_texto_input_{projeto_id}'] = texto_inicial_textarea
             st.session_state[f'current_texto_input_pid'] = projeto_id
 
-
         if texto_inicial_textarea:
             st.success("📄 Conteúdo do projeto já existente carregado.")
         else:
@@ -131,28 +130,62 @@ def pagina_editar_projeto():
                                        key=f"caixa_texto_manual_{projeto_id}")
             if texto_digitado != st.session_state.get(f'current_texto_input_{projeto_id}'):
                 st.session_state[f'current_texto_input_{projeto_id}'] = texto_digitado
-                # No need to rerun on_change, button press will handle it
 
         elif modo_entrada == "📄 Importar PDF":
+            # Adiciona informações sobre limites de tamanho
+            st.info("""
+            📝 **Dicas para importação de PDF:**
+            - Tamanho máximo recomendado: 10MB
+            - Para arquivos maiores, considere dividir em partes menores
+            - Certifique-se que o PDF não está protegido por senha
+            - O texto deve estar selecionável (não apenas imagens)
+            """)
+            
             arquivo = st.file_uploader("Selecione o arquivo PDF", type=["pdf"], key=f"pdf_uploader_novo_{projeto_id}")
+            
             if arquivo:
-                with st.spinner("Processando PDF..."):
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp:
-                        temp.write(arquivo.read())
+                # Verifica o tamanho do arquivo
+                tamanho_arquivo = arquivo.size / (1024 * 1024)  # Converte para MB
+                if tamanho_arquivo > 10:
+                    st.warning(f"⚠️ O arquivo é muito grande ({tamanho_arquivo:.1f}MB). Recomendamos dividir em partes menores para melhor processamento.")
+                    if not st.checkbox("Continuar mesmo assim", key=f"continuar_pdf_grande_{projeto_id}"):
+                        st.stop()
+
+                with st.spinner("Processando PDF... Isso pode levar alguns instantes para arquivos maiores."):
+                    try:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp:
+                            temp.write(arquivo.read())
+                            temp_path = temp.name
+
                         try:
-                            texto_input_pdf = carrega_pdf(temp.name)
-                            os.remove(temp.name) 
-                            st.session_state[f'current_texto_input_{projeto_id}'] = texto_input_pdf 
-                            st.success("✅ PDF carregado com sucesso!")
-                            st.text_area("Conteúdo extraído do PDF (visualização)", 
-                                    value=st.session_state[f'current_texto_input_{projeto_id}'], 
-                                    height=200, 
-                                    key=f"visualizacao_pdf_{projeto_id}", 
-                                    disabled=True)
-                            st.info("Para editar o conteúdo do PDF, selecione 'Digitar texto' e o conteúdo será copiado para a caixa de edição.")
+                            texto_input_pdf = carrega_pdf(temp_path)
+                            if not texto_input_pdf or len(texto_input_pdf.strip()) < 10:
+                                st.error("⚠️ O PDF não parece conter texto extraível. Verifique se o arquivo não está apenas com imagens ou se o texto está selecionável.")
+                            else:
+                                st.session_state[f'current_texto_input_{projeto_id}'] = texto_input_pdf
+                                st.success(f"✅ PDF carregado com sucesso! ({len(texto_input_pdf)} caracteres extraídos)")
+                                st.text_area("Conteúdo extraído do PDF (visualização)", 
+                                        value=st.session_state[f'current_texto_input_{projeto_id}'], 
+                                        height=200, 
+                                        key=f"visualizacao_pdf_{projeto_id}", 
+                                        disabled=True)
+                                st.info("Para editar o conteúdo do PDF, selecione 'Digitar texto' e o conteúdo será copiado para a caixa de edição.")
                         except Exception as e:
-                            st.error(f"Erro ao processar PDF: {str(e)}")
+                            st.error(f"Erro ao extrair texto do PDF: {str(e)}")
+                            if "password" in str(e).lower():
+                                st.error("O PDF parece estar protegido por senha. Por favor, remova a proteção e tente novamente.")
+                            elif "400" in str(e):
+                                st.error("Erro ao processar o PDF. O arquivo pode estar corrompido ou em formato não suportado.")
                             st.code(traceback.format_exc())
+                        finally:
+                            # Limpa o arquivo temporário
+                            try:
+                                os.remove(temp_path)
+                            except:
+                                pass
+                    except Exception as e:
+                        st.error(f"Erro ao processar PDF: {str(e)}")
+                        st.code(traceback.format_exc())
         
         texto_para_salvar = st.session_state.get(f'current_texto_input_{projeto_id}', '')
 
@@ -176,9 +209,9 @@ def pagina_editar_projeto():
                             # Update the main project object in session if it's there
                             if 'projeto_selecionado' in st.session_state and st.session_state['projeto_selecionado']['id'] == projeto_id:
                                 st.session_state['projeto_selecionado']['texto_projeto'] = texto_para_salvar.strip()
-                            st.success("✅ Conteúdo do projeto salvo com sucesso!") 
-                            time.sleep(1)
-                            st.rerun() 
+                        st.success("✅ Conteúdo do projeto salvo com sucesso!")
+                        time.sleep(1)
+                        st.rerun() 
                     else:
                         st.error("Erro: Projeto não encontrado no Firebase para salvar.")
                 except Exception as e:
@@ -203,7 +236,6 @@ def pagina_editar_projeto():
                     del st.session_state[f'diagnostico_editavel_{projeto_id}']
 
                 with st.spinner("Analisando projeto com base no edital e projetos aprovados..."):
-                    # (Lógica de geração de diagnóstico existente)
                     try:
                         diagnostico_container = st.empty()
                         diagnostico_texto_stream = ""
@@ -212,28 +244,63 @@ def pagina_editar_projeto():
                             diagnostico_texto_stream += text
                             diagnostico_container.markdown(diagnostico_texto_stream)
                         
+                        # Buscar informações do edital associado no Firestore
                         edital_associado_id = projeto.get('edital_associado')
-                        texto_edital_context, texto_selecionados_context = None, None
-                        # ... (código para buscar contexto do edital) ...
+                        texto_edital_context = None
+                        texto_selecionados_context = None
 
+                        if edital_associado_id:
+                            try:
+                                edital_doc = db.collection('editais').document(edital_associado_id).get()
+                                if edital_doc.exists:
+                                    edital_data = edital_doc.to_dict()
+                                    texto_edital_context = edital_data.get('texto_edital', '')
+                                    texto_selecionados_context = edital_data.get('texto_selecionados', '')
+                                    
+                                    if not texto_edital_context:
+                                        st.warning("O edital associado não possui texto para análise.")
+                                    else:
+                                        st.info(f"Analisando projeto contra o edital: {edital_data.get('nome', 'Edital sem nome')}")
+                                else:
+                                    st.warning("Edital associado não encontrado no banco de dados.")
+                            except Exception as e:
+                                st.error(f"Erro ao buscar edital: {str(e)}")
+                                st.code(traceback.format_exc())
+                        else:
+                            st.info("Nenhum edital associado a este projeto. A análise será feita apenas com base no texto do projeto.")
+
+                        # Gerar diagnóstico com os contextos obtidos
                         analise_edital_stream = avaliar_contra_edital(texto_projeto_atual, texto_edital_context, texto_selecionados_context)
-                        for char in analise_edital_stream: update_diagnostico_stream(char); time.sleep(0.005)
+                        for char in analise_edital_stream: 
+                            update_diagnostico_stream(char)
+                            time.sleep(0.005)
+                        
                         update_diagnostico_stream("\n\n")
+                        
                         comparativo_stream = comparar_com_selecionados(texto_projeto_atual, texto_edital_context, texto_selecionados_context)
-                        for char in comparativo_stream: update_diagnostico_stream(char); time.sleep(0.005)
+                        for char in comparativo_stream: 
+                            update_diagnostico_stream(char)
+                            time.sleep(0.005)
+                        
                         diagnostico_final_completo = diagnostico_texto_stream 
 
+                        # Salvar diagnóstico no Firestore
                         db.collection('projetos').document(projeto_id).update({
                             'diagnostico_texto': diagnostico_final_completo,
                             'ultima_atualizacao': firestore.SERVER_TIMESTAMP
                         })
+                        
+                        # Atualizar estados da sessão
                         st.session_state[f'diagnostico_texto_{projeto_id}'] = diagnostico_final_completo
                         if 'projeto_selecionado' in st.session_state and st.session_state['projeto_selecionado']['id'] == projeto_id:
-                             st.session_state['projeto_selecionado']['diagnostico_texto'] = diagnostico_final_completo
+                            st.session_state['projeto_selecionado']['diagnostico_texto'] = diagnostico_final_completo
+                        
                         st.success("✅ Diagnóstico concluído e salvo!")
-                        time.sleep(1); st.rerun()
+                        time.sleep(1)
+                        st.rerun()
                     except Exception as e:
-                        st.error(f"Erro ao gerar diagnóstico: {str(e)}"); st.code(traceback.format_exc())
+                        st.error(f"Erro ao gerar diagnóstico: {str(e)}")
+                        st.code(traceback.format_exc())
 
             st.divider()
             st.subheader("Resultado do Diagnóstico (Editável)")
