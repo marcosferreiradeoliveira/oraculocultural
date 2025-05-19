@@ -1,3 +1,16 @@
+# Configuração da página Streamlit (deve ser a primeira chamada Streamlit NO SCRIPT PRINCIPAL)
+st.set_page_config(
+    page_title="Oráculo Cultural",
+    page_icon="🎭",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': "# Oráculo Cultural\nSua plataforma para decifrar o universo da cultura."
+    }
+)
+
 import tempfile
 from langchain_openai import ChatOpenAI
 import os
@@ -42,19 +55,6 @@ from constants import (
     OBJETIVOS_KEY,
     JUSTIFICATIVA_KEY,
     EDITAL_SELECIONADO_KEY
-)
-
-# Configuração da página Streamlit (deve ser a primeira chamada Streamlit NO SCRIPT PRINCIPAL)
-st.set_page_config(
-    page_title="Oráculo Cultural",
-    page_icon="🎭",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-    menu_items={
-        'Get Help': None,
-        'Report a bug': None,
-        'About': "# Oráculo Cultural\nSua plataforma para decifrar o universo da cultura."
-    }
 )
 
 # Carrega variáveis de ambiente do arquivo .env (se existir)
