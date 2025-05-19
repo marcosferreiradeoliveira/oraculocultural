@@ -4,28 +4,26 @@ from firebase_admin import auth, firestore, credentials
 from constants import PAGINA_ATUAL_SESSION_KEY
 from services.firebase_init import initialize_firebase, get_error_message
 
-# É uma boa prática verificar se o Firebase Admin já foi inicializado,
-# especialmente se este código puder ser chamado em diferentes contextos.
-# No entanto, a inicialização principal geralmente ocorre no script principal do seu app.
-# Se este for um módulo de página isolado, garanta que a inicialização ocorreu antes.
-# Para este exemplo, vamos assumir que a inicialização já aconteceu ou adicionar um bloco simples.
-
-try:
-    if not firebase_admin._apps:
-        if not initialize_firebase():
-            st.error(get_error_message())
-            db = None
-        else:
-            db = firestore.client()
-except Exception as e:
-    if "already initialized" not in str(e).lower(): # Ignora erro de já inicializado
-        st.error(f"Falha ao inicializar Firebase Admin (necessário para Firestore): {e}")
-        print(f"Erro de inicialização Firebase em pagina_cadastro: {e}")
-    db = None 
-    print(f"Firestore client não pôde ser obtido em pagina_cadastro: {e}")
-
-
 def pagina_cadastro():
+    """Exibe a página de cadastro com layout moderno e otimizado"""
+    # Inicializa o Firebase e obtém o cliente Firestore
+    try:
+        if not firebase_admin._apps:
+            if not initialize_firebase():
+                st.error(get_error_message())
+                return
+        db = firestore.client()
+    except Exception as e:
+        if "already initialized" not in str(e).lower(): # Ignora erro de já inicializado
+            st.error(f"Falha ao inicializar Firebase Admin (necessário para Firestore): {e}")
+            print(f"Erro de inicialização Firebase em pagina_cadastro: {e}")
+            return
+        try:
+            db = firestore.client()
+        except Exception as e:
+            st.error(f"Erro ao obter cliente Firestore: {e}")
+            return
+
     st.markdown("""
         <style>
             .cadastro-container {
@@ -73,8 +71,6 @@ def pagina_cadastro():
                 st.error("A senha deve ter pelo menos 6 caracteres.")
             elif senha != repetir_senha:
                 st.error("As senhas não coincidem.")
-            elif not db: # Verifica se o cliente Firestore está disponível
-                st.error("Não foi possível conectar ao banco de dados para salvar informações adicionais. Cadastro não pôde ser completado.")
             else:
                 try:
                     # 1. Criar usuário no Firebase Authentication
