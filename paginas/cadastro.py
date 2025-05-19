@@ -28,7 +28,7 @@ try:
             # Para simplificar, vamos assumir que o arquivo JSON está no caminho especificado
             # ou que você adaptará para st.secrets se necessário.
             cred = credentials.Certificate("config/firebase-service-account.json") # Mantenha ou adapte esta linha
-            firebase_admin.initialize_app(cred)
+            # firebase_admin.initialize_app(cred)
             print("Firebase Admin inicializado em pagina_cadastro.")
         except Exception as e:
             if "already initialized" not in str(e).lower(): # Ignora erro de já inicializado
