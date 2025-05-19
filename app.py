@@ -35,6 +35,9 @@ from loaders import carrega_pdf
 # Importações de páginas
 from paginas.login import pagina_login # Página de login refatorada
 from paginas.pagina_editar_projeto import pagina_editar_projeto as pagina_editar_projeto_view
+from paginas.reset_password import pagina_reset_password
+from paginas.cadastro import pagina_cadastro
+from paginas.pagina_cadastro_edital import pagina_cadastro_edital
 
 
 
@@ -50,44 +53,76 @@ ORCAMENTO_KEY = 'orcamento'
 CRONOGRAMA_KEY = 'cronograma'
 OBJETIVOS_KEY = 'objetivos'
 JUSTIFICATIVA_KEY = 'justificativa'
-openai_api_key = st.secrets["openai"]["api_key"]
-llm = ChatOpenAI(
-    openai_api_key=openai_api_key,
-    model="gpt-3.5-turbo"
-)
+EDITAL_SELECIONADO_KEY = 'edital_selecionado'
 
+# Configuração do OpenAI
+try:
+    # Tenta carregar do .env primeiro (desenvolvimento local)
+    if os.path.exists('.env'):
+        load_dotenv()
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+    else:
+        # Se não encontrar .env, usa os secrets do Streamlit (produção)
+        openai_api_key = st.secrets["openai"]["api_key"]
+        
+    if not openai_api_key:
+        raise ValueError("OpenAI API key não encontrada")
+        
+    llm = ChatOpenAI(
+        openai_api_key=openai_api_key,
+        model="gpt-3.5-turbo"
+    )
+except Exception as e:
+    st.error(f"Erro ao inicializar OpenAI: {str(e)}")
+    raise
 
 # Inicialização do Firebase (deve ser chamada uma vez)
 def initialize_firebase():
     """Inicializa a conexão com o Firebase e retorna status de sucesso"""
     if not firebase_admin._apps:
         try:
-            # Carrega as credenciais do Secrets
-            firebase_config = st.secrets["firebase_credentials"]
-            
-            # Prepara o dicionário de credenciais
-            cred_dict = {
-                "type": firebase_config["type"],
-                "project_id": firebase_config["project_id"],
-                "private_key_id": firebase_config["private_key_id"],
-                "private_key": firebase_config["private_key"].replace('\\n', '\n'),
-                "client_email": firebase_config["client_email"],
-                "client_id": firebase_config["client_id"],
-                "auth_uri": firebase_config["auth_uri"],
-                "token_uri": firebase_config["token_uri"],
-                "auth_provider_x509_cert_url": firebase_config["auth_provider_x509_cert_url"],
-                "client_x509_cert_url": firebase_config["client_x509_cert_url"],
-                "universe_domain": firebase_config.get("universe_domain", "googleapis.com")
-            }
-            
-            # Inicializa o Firebase
-            cred = credentials.Certificate(cred_dict)
-            firebase_admin.initialize_app(cred)
-            st.success("Conexão com Firebase estabelecida!")
-            return True  # Retorna True em caso de sucesso
+            # Tenta usar o arquivo JSON local primeiro (desenvolvimento local)
+            json_path = "config/firebase-service-account.json"
+            if os.path.exists(json_path):
+                cred = credentials.Certificate(json_path)
+                firebase_admin.initialize_app(cred)
+                st.success("Conexão com Firebase estabelecida usando arquivo local!")
+                return True
+            else:
+                # Se não encontrar o arquivo JSON, tenta usar os secrets do Streamlit (produção)
+                firebase_config = st.secrets["firebase_credentials"]
+                
+                # Validação dos campos obrigatórios
+                required_fields = ["type", "project_id", "private_key", "client_email"]
+                missing_fields = [field for field in required_fields if not firebase_config.get(field)]
+                if missing_fields:
+                    raise ValueError(f"Campos obrigatórios ausentes: {', '.join(missing_fields)}")
+                
+                # Prepara o dicionário de credenciais
+                cred_dict = {
+                    "type": firebase_config["type"],
+                    "project_id": firebase_config["project_id"],
+                    "private_key_id": firebase_config["private_key_id"],
+                    "private_key": firebase_config["private_key"],
+                    "client_email": firebase_config["client_email"],
+                    "client_id": firebase_config["client_id"],
+                    "auth_uri": firebase_config["auth_uri"],
+                    "token_uri": firebase_config["token_uri"],
+                    "auth_provider_x509_cert_url": firebase_config["auth_provider_x509_cert_url"],
+                    "client_x509_cert_url": firebase_config["client_x509_cert_url"],
+                    "universe_domain": firebase_config.get("universe_domain", "googleapis.com")
+                }
+                
+                # Inicializa o Firebase
+                cred = credentials.Certificate(cred_dict)
+                firebase_admin.initialize_app(cred)
+                st.success("Conexão com Firebase estabelecida usando secrets!")
+                return True
         except Exception as e:
             st.error(f"Erro ao conectar ao Firebase: {str(e)}")
-            return False  # Retorna False em caso de falha
+            st.error("Detalhes do erro:")
+            st.exception(e)
+            return False
     return True  # Já estava inicializado
 
 # Chama a função de inicialização
@@ -169,6 +204,14 @@ def get_user_projects(user_id):
 # Página de Projetos
 def pagina_projetos():
     """Exibe a página de listagem de projetos do usuário."""
+
+        
+        # Mostrar resumo de alterações se existirem
+    if 'ultimas_alteracoes' in st.session_state:
+            alteracoes = st.session_state['ultimas_alteracoes']
+            st.success(f"✅ Alterações aplicadas no projeto: {alteracoes['nome_projeto']}")
+            st.expander("📝 Ver detalhes das alterações").markdown(alteracoes['alteracoes'])
+            del st.session_state['ultimas_alteracoes']  # Remove após mostrar
     if not st.session_state.get(USER_SESSION_KEY):
         st.warning("Usuário não logado.")
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
@@ -190,13 +233,19 @@ def pagina_projetos():
     
     st.header('Meus Projetos Culturais', divider='rainbow')
     
-    # Botão para criar novo projeto sempre visível no topo
-    if st.button("🎨 Criar Novo Projeto", type="primary", use_container_width=False): # Ajuste use_container_width conforme preferir
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'novo_projeto'
-        # Limpa dados de projeto selecionado ou texto de projeto anterior
-        if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
-        if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
-        st.rerun()
+    # Botões para criar novo projeto e cadastrar edital
+    col_create1, col_create2 = st.columns(2)
+    with col_create1:
+        if st.button("🎨 Criar Novo Projeto", type="primary", use_container_width=True):
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'novo_projeto'
+            # Limpa dados de projeto selecionado ou texto de projeto anterior
+            if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
+            if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
+            st.rerun()
+    with col_create2:
+        if st.button("📥 Cadastrar Novo Edital", type="secondary", use_container_width=True):
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro_edital'
+            st.rerun()
 
     if not projetos:
         st.markdown("""
@@ -245,11 +294,32 @@ def pagina_projetos():
                 st.markdown("---") # Separador visual entre os cards na mesma coluna
 
 
-# Página para Criar Novo Projeto
+# Função para Criar Novo Projeto
 def pagina_novo_projeto():
     """Exibe o formulário para criar um novo projeto cultural."""
     st.header('✨ Criar Novo Projeto Cultural')
     
+    # Função para recuperar editais do Firestore
+    @st.cache_data
+    def get_editais():
+        """Recupera a lista de editais cadastrados no Firestore."""
+        try:
+            db = firestore.client()
+            editais_ref = db.collection('editais')
+            editais_stream = editais_ref.stream()
+            # Retorna uma lista de dicionários, incluindo o ID do documento
+            return [{'id': doc.id, **doc.to_dict()} for doc in editais_stream]
+        except Exception as e:
+            st.error(f"Erro ao recuperar editais: {str(e)}")
+            return []
+
+    # Carregar a lista de editais disponíveis
+    editais_disponiveis = get_editais()
+
+    # Preparar opções para o selectbox
+    edital_options = {'-- Selecione um Edital (Opcional) --': None} # Opção padrão
+    edital_options.update({edital['nome']: edital['id'] for edital in editais_disponiveis})
+
     with st.form("novo_projeto_form"):
         nome = st.text_input("Nome do Projeto*", help="O título principal do seu projeto.")
         descricao = st.text_area("Descrição Detalhada do Projeto*", height=150, help="Descreva os objetivos, público-alvo, e o que torna seu projeto único.")
@@ -260,6 +330,13 @@ def pagina_novo_projeto():
         ], help="Selecione a categoria que melhor descreve seu projeto.")
         
         # Adicionar mais campos se necessário (ex: data de início, local, etc.)
+
+        # Selectbox para escolher o edital
+        nome_edital_selecionado = st.selectbox(
+            "Associar a um Edital (Opcional)",
+            list(edital_options.keys()),
+            help="Selecione um edital para associar este projeto. Isso permitirá usar os dados do edital para análise."
+        )
 
         submitted = st.form_submit_button("🚀 Salvar Projeto")
         
@@ -274,11 +351,15 @@ def pagina_novo_projeto():
                         st.error("Erro: Usuário não identificado. Faça login novamente.")
                         return
 
+                    # Obtém o ID do edital selecionado
+                    edital_id_selecionado = edital_options[nome_edital_selecionado]
+
                     novo_projeto_data = {
                         'nome': nome,
                         'descricao': descricao,
                         'categoria': categoria,
                         'user_id': user_uid,
+                        'edital_associado': edital_id_selecionado, # Salva o ID do edital (pode ser None)
                         'data_criacao': firestore.SERVER_TIMESTAMP,
                         'data_atualizacao': firestore.SERVER_TIMESTAMP,
                         # Adicione outros campos conforme necessário
@@ -425,19 +506,31 @@ def main():
 
     # Roteamento de páginas
     if not st.session_state[AUTENTICADO_SESSION_KEY]:
-        pagina_login() # Se não autenticado, mostra a página de login
+        current_page = st.session_state[PAGINA_ATUAL_SESSION_KEY]
+        if current_page == 'reset_password':
+            pagina_reset_password()
+        elif current_page == 'cadastro':
+            pagina_cadastro()
+        else:
+            pagina_login() # Se não autenticado, mostra a página de login
     else:
         # Usuário autenticado, navega para a página atual definida no estado da sessão
         current_page = st.session_state[PAGINA_ATUAL_SESSION_KEY]
+        # Exibe saudação no topo
+        user = st.session_state.get(USER_SESSION_KEY)
+        if user:
+            nome = user.get('display_name') or user.get('email', 'Usuário')
+            st.markdown(f"<div style='font-size:1.2rem; color:#7e22ce; margin-bottom:1rem;'>Seja bem-vindo, <b>{nome}</b>!</div>", unsafe_allow_html=True)
         if current_page == 'projetos':
             pagina_projetos()
         elif current_page == 'novo_projeto':
             pagina_novo_projeto()
         elif current_page == 'editar_projeto':
-            # pagina_editar_projeto() # Chama a função importada
-            pagina_editar_projeto_view() # Usando o alias da importação
+            pagina_editar_projeto_view()
         elif current_page == 'detalhes_projeto':
             pagina_detalhes_projeto()
+        elif current_page == 'cadastro_edital':
+            pagina_cadastro_edital()
         else:
             # Fallback: se a página atual for desconhecida, volta para a página de projetos
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'

@@ -4,6 +4,8 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 import streamlit as st
 from typing import Optional, Dict, Any
+import os
+from dotenv import load_dotenv
 
 # Configuração centralizada do LLM
 @st.cache_resource
@@ -22,13 +24,28 @@ def get_llm(
     Returns:
         Instância do ChatOpenAI configurada
     """
-    return ChatOpenAI(
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        openai_api_key=st.secrets["openai"]["api_key"],
-        streaming=True
-    )
+    try:
+        # Tenta carregar do .env primeiro (desenvolvimento local)
+        if os.path.exists('.env'):
+            load_dotenv()
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+        else:
+            # Se não encontrar .env, usa os secrets do Streamlit (produção)
+            openai_api_key = st.secrets["openai"]["api_key"]
+            
+        if not openai_api_key:
+            raise ValueError("OpenAI API key não encontrada")
+            
+        return ChatOpenAI(
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            openai_api_key=openai_api_key,
+            streaming=True
+        )
+    except Exception as e:
+        st.error(f"Erro ao inicializar LLM: {str(e)}")
+        raise
 
 # models.py - _create_chain com depuração
 def _create_chain(
@@ -295,3 +312,25 @@ def gerar_documento_completo(
         "etapas": gerar_etapas_trabalho(texto_projeto, context, llm),
         "ficha_tecnica": gerar_ficha_tecnica(texto_projeto, context, llm)
     }
+
+def revise_project_with_diagnostic(
+    project_text: str,
+    diagnostic_text: str,
+    llm: Optional[ChatOpenAI] = None
+) -> str:
+    """Revisa o texto do projeto com base no texto de diagnóstico fornecido."""
+    template = """
+    Revise o texto do projeto com base no texto de diagnóstico fornecido:
+    
+    DIAGNÓSTICO:
+    {diagnostic_text}
+    
+    PROJETO:
+    {project_text}"""
+    
+    try:
+        chain = _create_chain(template, llm)
+        return chain.invoke(project_text[:15000])
+    except Exception as e:
+        st.error(f"Falha ao revisar projeto: {str(e)}")
+        return ""
