@@ -20,12 +20,9 @@ from dotenv import load_dotenv # Para carregar variáveis de .env
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1 import FieldFilter # Usado em get_user_projects
+import json # Importado para tentar carregar JSON de string
 
 # Importações de modelos e utilitários
-# !!! IMPORTANTE PARA O ERRO set_page_config(): !!!
-# !!! Verifique se NENHUM destes arquivos importados (models, loaders, ou os de 'paginas') !!!
-# !!! executa QUALQUER comando st. (ex: st.write, st.error) no escopo global. !!!
-# !!! Comandos Streamlit só devem ser chamados DENTRO de funções nesses arquivos. !!!
 from models import (
     get_llm, 
     gerar_resumo_projeto,
@@ -91,101 +88,90 @@ def initialize_firebase_app():
         print("INFO: Firebase Admin já estava inicializado.")
         return True
 
+    print("INFO: Tentando inicializar Firebase Admin...")
     try:
-        print("DEBUG: Iniciando verificação do st.secrets...")
         if not hasattr(st, 'secrets'):
-            error_msg = "ERRO: st.secrets não está disponível. Verifique se está rodando no Streamlit Cloud."
+            error_msg = "ERRO CRÍTICO: st.secrets não está disponível. Impossível carregar credenciais no Streamlit Cloud."
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
-
-        print("DEBUG: st.secrets disponível. Verificando chaves...")
-        print("DEBUG: Chaves disponíveis em st.secrets:", list(st.secrets.keys()))
 
         if "firebase_credentials" not in st.secrets:
-            error_msg = "ERRO: 'firebase_credentials' não encontrado em st.secrets. Verifique as configurações no Streamlit Cloud."
+            error_msg = "ERRO CRÍTICO: 'firebase_credentials' não encontrado em st.secrets. Verifique as configurações no Streamlit Cloud."
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
 
-        # Get the credentials from secrets and convert to dictionary
-        print("DEBUG: Obtendo firebase_credentials de st.secrets...")
-        raw_creds = st.secrets["firebase_credentials"]
-        print("DEBUG: Tipo do raw_creds:", type(raw_creds))
+        firebase_config_raw = st.secrets["firebase_credentials"]
         
-        # Convert to dictionary if it's not already
-        if not isinstance(raw_creds, dict):
-            print("DEBUG: Convertendo credenciais para dicionário...")
+        print(f"DEBUG Firebase Init: Tentando carregar de st.secrets['firebase_credentials']")
+        print(f"DEBUG Firebase Init: Tipo de firebase_config_raw: {type(firebase_config_raw)}")
+
+        firebase_config_dict = None
+        if isinstance(firebase_config_raw, str):
+            print(f"DEBUG Firebase Init: firebase_config_raw é uma string. Conteúdo (primeiros 200 chars): {firebase_config_raw[:200]}")
             try:
-                # Try to convert to dictionary by accessing all attributes
-                firebase_config_dict = {
-                    'type': raw_creds.type,
-                    'project_id': raw_creds.project_id,
-                    'private_key_id': raw_creds.private_key_id,
-                    'private_key': raw_creds.private_key,
-                    'client_email': raw_creds.client_email,
-                    'client_id': raw_creds.client_id,
-                    'auth_uri': raw_creds.auth_uri,
-                    'token_uri': raw_creds.token_uri,
-                    'auth_provider_x509_cert_url': raw_creds.auth_provider_x509_cert_url,
-                    'client_x509_cert_url': raw_creds.client_x509_cert_url,
-                    'universe_domain': raw_creds.universe_domain
-                }
-            except Exception as e:
-                print(f"DEBUG: Erro ao converter credenciais: {str(e)}")
-                error_msg = "ERRO: Não foi possível converter as credenciais para um dicionário."
+                firebase_config_dict = json.loads(firebase_config_raw)
+                print("DEBUG Firebase Init: String parseada como JSON com sucesso.")
+            except json.JSONDecodeError as json_err:
+                error_msg = f"ERRO: 'firebase_credentials' é uma string, mas falhou ao ser parseada como JSON: {json_err}"
+                print(error_msg)
                 FIREBASE_INIT_ERROR_MESSAGE = error_msg
                 FIREBASE_APP_INITIALIZED = False
                 return False
+        elif isinstance(firebase_config_raw, dict):
+            firebase_config_dict = firebase_config_raw
+            print("DEBUG Firebase Init: firebase_config_raw já é um dicionário.")
         else:
-            firebase_config_dict = raw_creds
-
-        print("DEBUG: Tipo do firebase_config_dict após conversão:", type(firebase_config_dict))
-        print("DEBUG: Chaves disponíveis em firebase_config_dict:", list(firebase_config_dict.keys()))
+            error_msg = f"ERRO: 'firebase_credentials' não é nem string nem dicionário. Tipo encontrado: {type(firebase_config_raw)}"
+            print(error_msg)
+            FIREBASE_INIT_ERROR_MESSAGE = error_msg
+            FIREBASE_APP_INITIALIZED = False
+            return False
         
-        # Validate required fields
+        # Agora firebase_config_dict DEVE ser um dicionário se chegamos aqui
+        print(f"DEBUG Firebase Init: Chaves disponíveis em firebase_config_dict: {list(firebase_config_dict.keys())}")
+        print(f"DEBUG Firebase Init: Valor de 'type': {firebase_config_dict.get('type')}")
+        print(f"DEBUG Firebase Init: Valor de 'project_id': {firebase_config_dict.get('project_id')}")
+        print(f"DEBUG Firebase Init: Chave 'private_key' existe? {'private_key' in firebase_config_dict}")
+
         required_fields = [
             'type', 'project_id', 'private_key_id', 'private_key',
             'client_email', 'client_id', 'auth_uri', 'token_uri',
             'auth_provider_x509_cert_url', 'client_x509_cert_url'
         ]
         
-        print("DEBUG: Verificando campos obrigatórios...")
         missing_fields = [field for field in required_fields if field not in firebase_config_dict]
         if missing_fields:
-            error_msg = f"ERRO: Campos obrigatórios ausentes nas credenciais do Firebase: {', '.join(missing_fields)}"
+            error_msg = f"ERRO: Campos obrigatórios ausentes no dicionário firebase_credentials: {', '.join(missing_fields)}"
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
 
-        if not isinstance(firebase_config_dict, dict):
-            error_msg = f"ERRO: 'firebase_credentials' deve ser um dicionário, mas é {type(firebase_config_dict)}"
-            print(error_msg)
-            FIREBASE_INIT_ERROR_MESSAGE = error_msg
-            FIREBASE_APP_INITIALIZED = False
-            return False
-
-        print("DEBUG: Verificando tipo de credencial...")
         if firebase_config_dict.get('type') != "service_account":
-            error_msg = f"ERRO: O tipo de credencial deve ser 'service_account', mas é '{firebase_config_dict.get('type')}'"
+            error_msg = f"ERRO: O valor da chave 'type' ({firebase_config_dict.get('type')}) em firebase_credentials não é 'service_account'."
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
 
-        print("DEBUG: Verificando formato da chave privada...")
         private_key = firebase_config_dict.get('private_key', '')
-        if not private_key.startswith('-----BEGIN PRIVATE KEY-----') or not private_key.endswith('-----END PRIVATE KEY-----'):
-            error_msg = "ERRO: Formato inválido da chave privada. Deve incluir os marcadores BEGIN e END."
+        # A chave privada em JSON pode ter \n como literais, que precisam ser substituídos por novas linhas reais.
+        # No entanto, credentials.Certificate geralmente lida com isso. A verificação principal é a presença e os marcadores.
+        private_key_processed = private_key.replace('\\n', '\n')
+
+        if not private_key_processed.startswith('-----BEGIN PRIVATE KEY-----') or not private_key_processed.strip().endswith('-----END PRIVATE KEY-----'):
+            error_msg = "ERRO: Formato inválido da chave privada. Deve incluir os marcadores BEGIN e END e estar corretamente formatada."
+            # print(f"DEBUG: Private key processada (primeiros/últimos 100 chars): {private_key_processed[:100]}...{private_key_processed[-100:]}")
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
-
-        print("DEBUG: Tentando inicializar Firebase Admin...")
+        
+        # Use o dicionário processado para criar as credenciais
         cred = credentials.Certificate(firebase_config_dict)
         firebase_admin.initialize_app(cred)
         print("INFO: Conexão com Firebase estabelecida usando st.secrets!") 
@@ -193,15 +179,14 @@ def initialize_firebase_app():
         return True
             
     except Exception as e:
-        error_msg = f"ERRO GERAL ao inicializar Firebase Admin: {str(e)}"
+        error_msg = f"ERRO GERAL EXCEPCIONAL ao inicializar Firebase Admin: {str(e)}"
         print(error_msg)
-        print("DEBUG: Stack trace completo:", e.__traceback__)
+        import traceback
+        print(f"DEBUG Firebase Init: Traceback completo da exceção: {traceback.format_exc()}")
         FIREBASE_INIT_ERROR_MESSAGE = error_msg
         FIREBASE_APP_INITIALIZED = False
         return False
 
-# Chama a função de inicialização UMA VEZ no início do script.
-# A flag FIREBASE_APP_INITIALIZED será atualizada dentro da função.
 initialize_firebase_app()
 print(f"DEBUG app.py global: FIREBASE_APP_INITIALIZED = {FIREBASE_APP_INITIALIZED}, Error: {FIREBASE_INIT_ERROR_MESSAGE}")
 
@@ -277,9 +262,7 @@ def pagina_projetos():
     print(f"DEBUG pagina_projetos: Verificando Firebase. Initialized={FIREBASE_APP_INITIALIZED}")
     if not FIREBASE_APP_INITIALIZED:
         st.error("ALERTA: A conexão com o banco de dados (Firebase) falhou. Funcionalidades limitadas.")
-        # Opcional: impedir que o resto da página seja renderizado se o Firebase for essencial
-        # if st.button("Tentar Novamente"): st.rerun()
-        # return
+        return
 
     if not st.session_state.get(USER_SESSION_KEY):
         st.warning("Usuário não logado.")
@@ -471,19 +454,16 @@ def pagina_novo_projeto():
 # ...
 
 def main():
-    # A inicialização já ocorreu no escopo global. Agora verificamos o resultado.
     print(f"DEBUG main(): Verificando FIREBASE_APP_INITIALIZED = {FIREBASE_APP_INITIALIZED}. Erro capturado: {FIREBASE_INIT_ERROR_MESSAGE}")
     
     if not FIREBASE_APP_INITIALIZED:
-        # Exibe a mensagem de erro capturada durante a inicialização, se houver
         error_display_message = FIREBASE_INIT_ERROR_MESSAGE or "Erro desconhecido durante a inicialização do Firebase."
         st.error(f"Falha crítica na inicialização do Firebase. A aplicação não pode continuar. Detalhe: {error_display_message}")
-        st.stop() # Impede a execução se o Firebase não puder ser inicializado
+        st.stop() 
     
     if llm is None and st.session_state.get(PAGINA_ATUAL_SESSION_KEY, 'login') not in ['login', 'cadastro', 'reset_password']:
         st.warning("O modelo de linguagem (OpenAI) não foi inicializado. Algumas funcionalidades podem estar indisponíveis ou apresentar erros.")
 
-    # Inicializa o estado da sessão se as chaves não existirem
     if AUTENTICADO_SESSION_KEY not in st.session_state:
         st.session_state[AUTENTICADO_SESSION_KEY] = False
     if USER_SESSION_KEY not in st.session_state:
@@ -491,38 +471,33 @@ def main():
     if PAGINA_ATUAL_SESSION_KEY not in st.session_state:
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
 
-    # Roteamento de páginas
     if not st.session_state[AUTENTICADO_SESSION_KEY]:
         current_page = st.session_state[PAGINA_ATUAL_SESSION_KEY]
         if current_page == 'reset_password':
-            pagina_reset_password() # Assume que esta página também verifica FIREBASE_APP_INITIALIZED se necessário
+            pagina_reset_password() 
         elif current_page == 'cadastro':
-            pagina_cadastro() # Assume que esta página também verifica FIREBASE_APP_INITIALIZED
+            pagina_cadastro() 
         else: 
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
             pagina_login()
     else:
-        # Usuário autenticado
         current_page = st.session_state[PAGINA_ATUAL_SESSION_KEY]
         
-        # Verifica se o Firebase está OK antes de carregar páginas autenticadas que dependem dele
-        if not FIREBASE_APP_INITIALIZED and current_page not in ['login']: # Permite logout mesmo se firebase falhar
+        if not FIREBASE_APP_INITIALIZED and current_page not in ['login']: 
             st.error("Erro de conexão com o Firebase. Algumas funcionalidades podem não estar disponíveis.")
-            # Poderia redirecionar para uma página de erro ou login
             if st.button("Tentar reconectar / Voltar ao Login"):
                 st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
                 st.rerun()
             return
-
 
         if current_page == 'projetos':
             pagina_projetos()
         elif current_page == 'novo_projeto':
             pagina_novo_projeto()
         elif current_page == 'editar_projeto':
-            pagina_editar_projeto_view() # Esta página deve verificar FIREBASE_APP_INITIALIZED
+            pagina_editar_projeto_view() 
         elif current_page == 'cadastro_edital':
-            pagina_cadastro_edital() # Esta página deve verificar FIREBASE_APP_INITIALIZED
+            pagina_cadastro_edital() 
         else:
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
             st.rerun()
