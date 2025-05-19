@@ -107,8 +107,40 @@ def initialize_firebase_app():
             return False
 
         firebase_config_dict = st.secrets["firebase_credentials"]
-        if not isinstance(firebase_config_dict, dict) or not firebase_config_dict.get("type") == "service_account":
-            error_msg = "ERRO: 'firebase_credentials' em st.secrets não é um dicionário de conta de serviço válido."
+        
+        # Validate required fields
+        required_fields = [
+            'type', 'project_id', 'private_key_id', 'private_key',
+            'client_email', 'client_id', 'auth_uri', 'token_uri',
+            'auth_provider_x509_cert_url', 'client_x509_cert_url'
+        ]
+        
+        missing_fields = [field for field in required_fields if field not in firebase_config_dict]
+        if missing_fields:
+            error_msg = f"ERRO: Campos obrigatórios ausentes nas credenciais do Firebase: {', '.join(missing_fields)}"
+            print(error_msg)
+            FIREBASE_INIT_ERROR_MESSAGE = error_msg
+            FIREBASE_APP_INITIALIZED = False
+            return False
+
+        if not isinstance(firebase_config_dict, dict):
+            error_msg = "ERRO: 'firebase_credentials' deve ser um dicionário."
+            print(error_msg)
+            FIREBASE_INIT_ERROR_MESSAGE = error_msg
+            FIREBASE_APP_INITIALIZED = False
+            return False
+
+        if firebase_config_dict.get('type') != "service_account":
+            error_msg = "ERRO: O tipo de credencial deve ser 'service_account'."
+            print(error_msg)
+            FIREBASE_INIT_ERROR_MESSAGE = error_msg
+            FIREBASE_APP_INITIALIZED = False
+            return False
+
+        # Validate private key format
+        private_key = firebase_config_dict.get('private_key', '')
+        if not private_key.startswith('-----BEGIN PRIVATE KEY-----') or not private_key.endswith('-----END PRIVATE KEY-----'):
+            error_msg = "ERRO: Formato inválido da chave privada. Deve incluir os marcadores BEGIN e END."
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
@@ -120,7 +152,7 @@ def initialize_firebase_app():
         FIREBASE_APP_INITIALIZED = True
         return True
             
-    except Exception as e: # Captura qualquer exceção durante a inicialização
+    except Exception as e:
         error_msg = f"ERRO GERAL ao inicializar Firebase Admin: {str(e)}"
         print(error_msg)
         FIREBASE_INIT_ERROR_MESSAGE = error_msg
