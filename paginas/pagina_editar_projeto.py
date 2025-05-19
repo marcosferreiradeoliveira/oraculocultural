@@ -4,6 +4,7 @@ import traceback
 import time
 import firebase_admin
 from firebase_admin import firestore, credentials
+from services.firebase_init import initialize_firebase, get_error_message
 from models import (
     get_llm,
     gerar_resumo_projeto,
@@ -49,21 +50,9 @@ def pagina_editar_projeto():
 
     try:
         if not firebase_admin._apps:
-            if not hasattr(st, 'secrets'):
-                st.sidebar.error("st.secrets não está disponível. Verifique se está rodando no Streamlit Cloud.")
+            if not initialize_firebase():
+                st.sidebar.error(get_error_message())
                 return
-
-            if "firebase_credentials" not in st.secrets:
-                st.sidebar.error("'firebase_credentials' não encontrado em st.secrets. Verifique as configurações no Streamlit Cloud.")
-                return
-
-            firebase_config_dict = st.secrets["firebase_credentials"]
-            if not isinstance(firebase_config_dict, dict) or not firebase_config_dict.get("type") == "service_account":
-                st.sidebar.error("'firebase_credentials' em st.secrets não é um dicionário de conta de serviço válido.")
-                return
-
-            cred = credentials.Certificate(firebase_config_dict)
-            firebase_admin.initialize_app(cred)
         db = firestore.client()
         st.sidebar.success("Conexão com Firebase estabelecida!")
     except Exception as e:

@@ -25,39 +25,6 @@ from streamlit.runtime.secrets import AttrDict # Import AttrDict para verificaç
 import traceback # Importado para stack traces detalhados
 from services.firebase_init import initialize_firebase, get_error_message
 
-# Importações de modelos e utilitários
-from models import (
-    get_llm, 
-    gerar_resumo_projeto,
-    gerar_orcamento,
-    gerar_cronograma,
-    gerar_objetivos,
-    gerar_justificativa
-)
-from loaders import carrega_pdf
-
-# Importações de páginas
-from paginas.login import pagina_login
-from paginas.pagina_editar_projeto import pagina_editar_projeto as pagina_editar_projeto_view
-from paginas.reset_password import pagina_reset_password
-from paginas.cadastro import pagina_cadastro
-from paginas.pagina_cadastro_edital import pagina_cadastro_edital
-
-# Importar constantes
-from constants import (
-    USER_SESSION_KEY,
-    AUTENTICADO_SESSION_KEY,
-    PAGINA_ATUAL_SESSION_KEY,
-    PROJETO_SELECIONADO_KEY,
-    TEXTO_PROJETO_KEY,
-    RESUMO_KEY,
-    ORCAMENTO_KEY,
-    CRONOGRAMA_KEY,
-    OBJETIVOS_KEY,
-    JUSTIFICATIVA_KEY,
-    EDITAL_SELECIONADO_KEY
-)
-
 # Carrega variáveis de ambiente do arquivo .env (se existir)
 load_dotenv()
 
@@ -100,6 +67,38 @@ def initialize_firebase_app():
 initialize_firebase_app()
 print(f"DEBUG app.py global: FIREBASE_APP_INITIALIZED = {FIREBASE_APP_INITIALIZED}, Error: {FIREBASE_INIT_ERROR_MESSAGE}")
 
+# Importações de modelos e utilitários
+from models import (
+    get_llm, 
+    gerar_resumo_projeto,
+    gerar_orcamento,
+    gerar_cronograma,
+    gerar_objetivos,
+    gerar_justificativa
+)
+from loaders import carrega_pdf
+
+# Importar constantes
+from constants import (
+    USER_SESSION_KEY,
+    AUTENTICADO_SESSION_KEY,
+    PAGINA_ATUAL_SESSION_KEY,
+    PROJETO_SELECIONADO_KEY,
+    TEXTO_PROJETO_KEY,
+    RESUMO_KEY,
+    ORCAMENTO_KEY,
+    CRONOGRAMA_KEY,
+    OBJETIVOS_KEY,
+    JUSTIFICATIVA_KEY,
+    EDITAL_SELECIONADO_KEY
+)
+
+# Importações de páginas (movidas para depois da inicialização do Firebase)
+from paginas.login import pagina_login
+from paginas.pagina_editar_projeto import pagina_editar_projeto as pagina_editar_projeto_view
+from paginas.reset_password import pagina_reset_password
+from paginas.cadastro import pagina_cadastro
+from paginas.pagina_cadastro_edital import pagina_cadastro_edital
 
 # CSS customizado global
 st.markdown("""
