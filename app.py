@@ -92,34 +92,33 @@ def initialize_firebase_app():
         return True
 
     try:
-        json_path = "config/firebase-service-account.json"
-        if os.path.exists(json_path):
-            cred = credentials.Certificate(json_path)
-            firebase_admin.initialize_app(cred)
-            print("INFO: Conexão com Firebase estabelecida usando arquivo local!")
-            FIREBASE_APP_INITIALIZED = True
-            return True
-        
-        elif hasattr(st, 'secrets') and "firebase_credentials" in st.secrets:
-            firebase_config_dict = st.secrets["firebase_credentials"]
-            if not isinstance(firebase_config_dict, dict) or not firebase_config_dict.get("type") == "service_account":
-                error_msg = "ERRO: 'firebase_credentials' em st.secrets não é um dicionário de conta de serviço válido."
-                print(error_msg)
-                FIREBASE_INIT_ERROR_MESSAGE = error_msg
-                FIREBASE_APP_INITIALIZED = False
-                return False
-
-            cred = credentials.Certificate(firebase_config_dict)
-            firebase_admin.initialize_app(cred)
-            print("INFO: Conexão com Firebase estabelecida usando st.secrets!") 
-            FIREBASE_APP_INITIALIZED = True
-            return True
-        else:
-            error_msg = "ERRO: Credenciais do Firebase não encontradas (nem arquivo JSON local, nem em st.secrets['firebase_credentials'])."
+        if not hasattr(st, 'secrets'):
+            error_msg = "ERRO: st.secrets não está disponível. Verifique se está rodando no Streamlit Cloud."
             print(error_msg)
             FIREBASE_INIT_ERROR_MESSAGE = error_msg
             FIREBASE_APP_INITIALIZED = False
             return False
+
+        if "firebase_credentials" not in st.secrets:
+            error_msg = "ERRO: 'firebase_credentials' não encontrado em st.secrets. Verifique as configurações no Streamlit Cloud."
+            print(error_msg)
+            FIREBASE_INIT_ERROR_MESSAGE = error_msg
+            FIREBASE_APP_INITIALIZED = False
+            return False
+
+        firebase_config_dict = st.secrets["firebase_credentials"]
+        if not isinstance(firebase_config_dict, dict) or not firebase_config_dict.get("type") == "service_account":
+            error_msg = "ERRO: 'firebase_credentials' em st.secrets não é um dicionário de conta de serviço válido."
+            print(error_msg)
+            FIREBASE_INIT_ERROR_MESSAGE = error_msg
+            FIREBASE_APP_INITIALIZED = False
+            return False
+
+        cred = credentials.Certificate(firebase_config_dict)
+        firebase_admin.initialize_app(cred)
+        print("INFO: Conexão com Firebase estabelecida usando st.secrets!") 
+        FIREBASE_APP_INITIALIZED = True
+        return True
             
     except Exception as e: # Captura qualquer exceção durante a inicialização
         error_msg = f"ERRO GERAL ao inicializar Firebase Admin: {str(e)}"
