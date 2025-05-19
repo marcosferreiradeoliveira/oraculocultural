@@ -110,11 +110,40 @@ def initialize_firebase_app():
             FIREBASE_APP_INITIALIZED = False
             return False
 
-        # Get the credentials from secrets
+        # Get the credentials from secrets and convert to dictionary
         print("DEBUG: Obtendo firebase_credentials de st.secrets...")
-        firebase_config_dict = st.secrets["firebase_credentials"]
-        print("DEBUG: Tipo do firebase_config_dict:", type(firebase_config_dict))
-        print("DEBUG: Chaves disponíveis em firebase_config_dict:", list(firebase_config_dict.keys()) if isinstance(firebase_config_dict, dict) else "Não é um dicionário")
+        raw_creds = st.secrets["firebase_credentials"]
+        print("DEBUG: Tipo do raw_creds:", type(raw_creds))
+        
+        # Convert to dictionary if it's not already
+        if not isinstance(raw_creds, dict):
+            print("DEBUG: Convertendo credenciais para dicionário...")
+            try:
+                # Try to convert to dictionary by accessing all attributes
+                firebase_config_dict = {
+                    'type': raw_creds.type,
+                    'project_id': raw_creds.project_id,
+                    'private_key_id': raw_creds.private_key_id,
+                    'private_key': raw_creds.private_key,
+                    'client_email': raw_creds.client_email,
+                    'client_id': raw_creds.client_id,
+                    'auth_uri': raw_creds.auth_uri,
+                    'token_uri': raw_creds.token_uri,
+                    'auth_provider_x509_cert_url': raw_creds.auth_provider_x509_cert_url,
+                    'client_x509_cert_url': raw_creds.client_x509_cert_url,
+                    'universe_domain': raw_creds.universe_domain
+                }
+            except Exception as e:
+                print(f"DEBUG: Erro ao converter credenciais: {str(e)}")
+                error_msg = "ERRO: Não foi possível converter as credenciais para um dicionário."
+                FIREBASE_INIT_ERROR_MESSAGE = error_msg
+                FIREBASE_APP_INITIALIZED = False
+                return False
+        else:
+            firebase_config_dict = raw_creds
+
+        print("DEBUG: Tipo do firebase_config_dict após conversão:", type(firebase_config_dict))
+        print("DEBUG: Chaves disponíveis em firebase_config_dict:", list(firebase_config_dict.keys()))
         
         # Validate required fields
         required_fields = [
