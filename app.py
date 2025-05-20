@@ -1,4 +1,7 @@
 import streamlit as st
+import datetime # Para trabalhar com datas e horas
+from google.cloud.firestore_v1 import FieldFilter # Necessário para consultas where no Firestore
+
 
 # Configuração da página Streamlit (deve ser a primeira chamada Streamlit NO SCRIPT PRINCIPAL)
 st.set_page_config(
@@ -7,6 +10,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
     menu_items={
+        # ... (menu items)
         'Get Help': None,
         'Report a bug': None,
         'About': "# Oráculo Cultural\nSua plataforma para decifrar o universo da cultura."
@@ -16,14 +20,15 @@ st.set_page_config(
 import tempfile
 from langchain_openai import ChatOpenAI
 import os
-from dotenv import load_dotenv # Para carregar variáveis de .env
 import firebase_admin
 from firebase_admin import credentials, firestore
-from google.cloud.firestore_v1 import FieldFilter # Usado em get_user_projects
+from google.cloud.firestore_v1 import FieldFilter # FieldFilter is correctly imported
+from google.api_core.datetime_helpers import DatetimeWithNanoseconds as GCloudTimestamp # More specific import for Timestamp
 import json # Importado para tentar carregar JSON de string
 from streamlit.runtime.secrets import AttrDict # Import AttrDict para verificação de tipo
 import traceback # Importado para stack traces detalhados
 from services.firebase_init import initialize_firebase, get_error_message
+from dotenv import load_dotenv # Para carregar variáveis de .env
 
 # Carrega variáveis de ambiente do arquivo .env (se existir)
 load_dotenv()
@@ -98,13 +103,22 @@ from paginas.login import pagina_login
 from paginas.pagina_editar_projeto import pagina_editar_projeto as pagina_editar_projeto_view
 from paginas.reset_password import pagina_reset_password
 from paginas.cadastro import pagina_cadastro
-from paginas.pagina_cadastro_edital import pagina_cadastro_edital
+from paginas.pagina_perfil import pagina_perfil # Nova importação
+from paginas.pagina_cadastro_edital import pagina_cadastro_edital # Mantido
+from paginas.pagina_pagamento_upgrade import pagina_pagamento_upgrade, pagina_payment_success, pagina_payment_failure, pagina_payment_pending # Modificado
 
 # CSS customizado global
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
+            
+        .login-container-direita {
+        background-color: #f8f9fa; /* Cor de fundo clara como no exemplo */
+        padding: 2rem;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
         
         .project-card {
             background-color: #f8f9fa;
@@ -176,30 +190,40 @@ def pagina_projetos():
     if not st.session_state.get(USER_SESSION_KEY):
         st.warning("Usuário não logado.")
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+        # No need for rerun here, main will handle the redirect
         st.rerun()
         return
 
     user_info = st.session_state[USER_SESSION_KEY]
     st.title(f'Bem-vindo(a), {user_info.get("display_name", user_info.get("email", "Usuário"))}!')
     
-    if st.button("Sair", key="logout_button_projetos"):
-        keys_to_clear = [
-            USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PROJETO_SELECIONADO_KEY,
-            TEXTO_PROJETO_KEY, RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY,
-            OBJETIVOS_KEY, JUSTIFICATIVA_KEY, EDITAL_SELECIONADO_KEY
-        ]
-        for key in keys_to_clear:
-            if key in st.session_state:
-                del st.session_state[key]
-        project_specific_keys = [k for k in st.session_state if user_info.get('uid','temp_id_clear') in k or 'diagnostico_editavel' in k or 'doc_gerado' in k]
-        for key in project_specific_keys:
-            if key in st.session_state:
-                del st.session_state[key]
+    # Botões de ação do usuário (Perfil e Sair)
+    cols_user_actions = st.columns(2)
+    with cols_user_actions[0]:
+        if st.button("👤 Meu Perfil", key="profile_button_projetos", use_container_width=True):
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
+            st.rerun()
+    with cols_user_actions[1]:
+        if st.button("🚪 Sair", key="logout_button_projetos", use_container_width=True):
+            keys_to_clear = [
+                USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PROJETO_SELECIONADO_KEY,
+                TEXTO_PROJETO_KEY, RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY,
+                OBJETIVOS_KEY, JUSTIFICATIVA_KEY, EDITAL_SELECIONADO_KEY
+            ]
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
+            # Limpeza mais genérica de chaves de sessão relacionadas a projetos ou diagnósticos
+            project_specific_keys_patterns = [user_info.get('uid','temp_id_clear'), 'diagnostico_editavel', 'doc_gerado', 'projeto_para_excluir']
+            keys_to_remove_session = [k for k in st.session_state if any(pattern in k for pattern in project_specific_keys_patterns)]
+            for key in keys_to_remove_session:
+                if key in st.session_state:
+                    del st.session_state[key]
 
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
-        st.success("Você saiu da sua conta.")
-        st.rerun()
-    
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+            st.success("Você saiu da sua conta.")
+            st.rerun()
+
     if 'ultimas_alteracoes' in st.session_state:
         alteracoes = st.session_state['ultimas_alteracoes']
         st.success(f"✅ Alterações aplicadas no projeto: {alteracoes.get('nome_projeto', 'N/A')}")
@@ -209,6 +233,7 @@ def pagina_projetos():
 
     projetos = get_user_projects(user_info['uid'])
     st.header('Meus Projetos Culturais', divider='rainbow')
+    st.markdown("---") # Adiciona um divisor
     
     col_create1, col_create2 = st.columns(2)
     with col_create1:
@@ -219,6 +244,7 @@ def pagina_projetos():
             st.rerun()
     with col_create2:
         if st.button("📥 Cadastrar Novo Edital", type="secondary", use_container_width=True):
+            # Clear project-specific session state when navigating away from project context
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro_edital'
             st.rerun()
 
@@ -253,6 +279,7 @@ def pagina_projetos():
                 with btn_cols_card[0]:
                     if st.button(f"📝 Editar", key=f"editar_{projeto['id']}", use_container_width=True):
                         st.session_state[PROJETO_SELECIONADO_KEY] = projeto
+                        # Clear text/generated docs state when editing a new project
                         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
                         st.rerun()
                 with btn_cols_card[1]:
@@ -351,6 +378,7 @@ def pagina_novo_projeto():
                     st.success(f"Projeto '{nome}' criado com sucesso!")
                     st.balloons()
                     st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
+                    # Clear form inputs and related session state if any
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar projeto: {str(e)}")
@@ -380,12 +408,30 @@ def main():
     if PAGINA_ATUAL_SESSION_KEY not in st.session_state:
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
 
+    # Inicializa o estado para forçar visualização do perfil (para teste expirado)
+    if 'forced_profile_view' not in st.session_state:
+        st.session_state['forced_profile_view'] = False
+
+    # Verificar se há um parâmetro 'page' na URL (vindo de redirects externos como Mercado Pago)
+    query_params = st.query_params
+    if "page" in query_params:
+        page_from_query = query_params.get("page")[0] # Pega o primeiro valor
+        # Valide 'page_from_query' contra uma lista de páginas permitidas por query param
+        allowed_query_pages = ['payment_success', 'payment_failure', 'payment_pending']
+        if page_from_query in allowed_query_pages:
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = page_from_query
+            # Limpar os query_params para evitar re-roteamento em reruns internos
+            st.query_params.clear() # Ou st.experimental_set_query_params() para remover específicos
+
     if not st.session_state[AUTENTICADO_SESSION_KEY]:
         current_page = st.session_state[PAGINA_ATUAL_SESSION_KEY]
         if current_page == 'reset_password':
             pagina_reset_password() 
         elif current_page == 'cadastro':
             pagina_cadastro() 
+        # Usuários não autenticados não devem acessar diretamente páginas de pagamento/status
+        # elif current_page == 'pagamento_upgrade': # Removido ou ajustado
+        #     pagina_pagamento_upgrade()
         else: 
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
             pagina_login()
@@ -399,17 +445,91 @@ def main():
                 st.rerun()
             return
 
-        if current_page == 'projetos':
+        # --- Check Trial Expiration and Force Profile View ---
+        user_info = st.session_state.get(USER_SESSION_KEY)
+        user_uid = user_info.get('uid') if user_info else None
+        
+        # Only perform trial check if Firebase is initialized and user UID is available
+        if user_uid and FIREBASE_APP_INITIALIZED:
+            try:
+                db = firestore.client()
+                # Query the 'usuarios' collection by the 'uid' field
+                usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid)).limit(1).stream()
+
+                usuario_doc_data = None
+                for doc in usuarios_query:
+                    usuario_doc_data = doc.to_dict()
+                    break
+
+                if usuario_doc_data and 'data_cadastro' in usuario_doc_data:
+                    data_cadastro_ts = usuario_doc_data['data_cadastro'] # Assuming this is a Firestore Timestamp
+                    # Ensure data_cadastro_ts is a Timestamp before converting
+                    if isinstance(data_cadastro_ts, GCloudTimestamp):
+                         # GCloudTimestamp (DatetimeWithNanoseconds) is already a datetime-like object.
+                         # We just need to ensure it's timezone-aware (it should be UTC by default from Firestore).
+                         # If it might be naive, or to be explicit:
+                         data_cadastro_dt = data_cadastro_ts.replace(tzinfo=datetime.timezone.utc) if data_cadastro_ts.tzinfo is None else data_cadastro_ts
+                         
+                         current_time = datetime.datetime.now(datetime.timezone.utc) # Use timezone-aware datetime
+
+                         # Check if registration is older than 24 hours
+                         if current_time - data_cadastro_dt > datetime.timedelta(hours=24):
+                             st.session_state['forced_profile_view'] = True
+                         else:
+                             # Trial is active, ensure flag is not set
+                             if 'forced_profile_view' in st.session_state:
+                                  del st.session_state['forced_profile_view']
+                    else:
+                         # data_cadastro is not a Timestamp, handle error or assume no trial
+                         print(f"WARNING: data_cadastro for user {user_uid} is not a Firestore Timestamp.")
+                         if 'forced_profile_view' in st.session_state:
+                              del st.session_state['forced_profile_view']
+
+                else:
+                    # User doc or data_cadastro not found - assume not in trial, ensure flag is not set
+                    if 'forced_profile_view' in st.session_state:
+                         del st.session_state['forced_profile_view']
+
+            except Exception as e:
+                st.error(f"Erro ao verificar data de cadastro: {e}")
+                print(f"ERROR checking registration date: {traceback.format_exc()}") # Add detailed logging
+                # On error, don't force redirect and ensure flag is not set
+                if 'forced_profile_view' in st.session_state:
+                     del st.session_state['forced_profile_view']
+
+        # --- Routing for Authenticated Users ---
+        # If forced to profile (trial expired) and the user is trying to access a page
+        # other than 'perfil' or 'pagamento_upgrade', redirect them to 'perfil'.
+        if st.session_state.get('forced_profile_view', False) and \
+           current_page not in ['perfil', 'pagamento_upgrade']:
+            # If the current page is not allowed, force to profile
+            if st.session_state[PAGINA_ATUAL_SESSION_KEY] != 'perfil':
+                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
+                st.rerun() # Rerun to render the profile page
+            # If already on 'perfil' due to this logic, no rerun needed, it will render profile.
+        # Else, proceed with normal routing based on current_page
+        elif current_page == 'projetos':
             pagina_projetos()
         elif current_page == 'novo_projeto':
             pagina_novo_projeto()
         elif current_page == 'editar_projeto':
             pagina_editar_projeto_view() 
+        elif current_page == 'pagamento_upgrade': # Adicionar esta rota
+            pagina_pagamento_upgrade()
+        elif current_page == 'payment_success': # Nova rota
+            pagina_payment_success()
+        elif current_page == 'payment_failure': # Nova rota
+            pagina_payment_failure()
+        elif current_page == 'payment_pending': # Nova rota
+            pagina_payment_pending()
+        elif current_page == 'perfil': # Nova rota
+            pagina_perfil()
         elif current_page == 'cadastro_edital':
             pagina_cadastro_edital() 
         else:
+            # Fallback for unknown authenticated page
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
             st.rerun()
 
-if __name__ == '__main__':
+if __name__ == '__main__': # This block remains at the end
     main()
