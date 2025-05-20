@@ -15,7 +15,7 @@ def pagina_pagamento_upgrade():
     """
     Página de Upgrade de Plano
     """
-    st.title("Página de Upgrade")
+    st.title("🚀 Upgrade para o Plano Premium")
     st.markdown("Desbloqueie todos os recursos e eleve seus projetos culturais ao próximo nível!")
 
     # Recuperar informações do usuário para o external_reference

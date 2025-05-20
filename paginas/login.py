@@ -35,7 +35,8 @@ def handle_login(email, senha):
             'login_time': start_time
         }
         st.session_state[AUTENTICADO_SESSION_KEY] = True
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos' # Destino padrão, será reavaliado em app.py
+        st.session_state['just_logged_in'] = True # Nova flag para indicar login recente
         
         end_time = time.time()
         st.toast(f"Bem-vindo, {user.email}! Login em {(end_time - start_time):.2f}s")

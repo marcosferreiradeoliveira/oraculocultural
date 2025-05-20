@@ -429,28 +429,43 @@ def main():
             pagina_reset_password() 
         elif current_page == 'cadastro':
             pagina_cadastro() 
-        # Usuários não autenticados não devem acessar diretamente páginas de pagamento/status
-        # elif current_page == 'pagamento_upgrade': # Removido ou ajustado
-        #     pagina_pagamento_upgrade()
         else: 
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
             pagina_login()
-    else:
-        current_page = st.session_state[PAGINA_ATUAL_SESSION_KEY]
-        
-        if not FIREBASE_APP_INITIALIZED and current_page not in ['login']: 
-            st.error("Erro de conexão com o Firebase. Algumas funcionalidades podem não estar disponíveis.")
-            if st.button("Tentar reconectar / Voltar ao Login"):
-                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
-                st.rerun()
-            return
+    else: # Usuário está autenticado
+        current_page_on_entry = st.session_state[PAGINA_ATUAL_SESSION_KEY]
+        final_target_page = current_page_on_entry # Página que será renderizada por padrão
 
         # --- Check Trial Expiration and Force Profile View ---
         user_info = st.session_state.get(USER_SESSION_KEY)
         user_uid = user_info.get('uid') if user_info else None
+        is_premium_user_from_db = False
         
-        # Only perform trial check if Firebase is initialized and user UID is available
+        # Verificar status premium do usuário no DB
         if user_uid and FIREBASE_APP_INITIALIZED:
+            try:
+                db = firestore.client()
+                usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid)).limit(1).stream()
+                usuario_doc_data_for_premium_check = None
+                for doc_premium in usuarios_query:
+                    usuario_doc_data_for_premium_check = doc_premium.to_dict()
+                    break
+                if usuario_doc_data_for_premium_check:
+                    is_premium_user_from_db = usuario_doc_data_for_premium_check.get('premium', False)
+            except Exception as e:
+                print(f"Erro ao buscar status premium do usuário {user_uid} em app.py: {e}")
+
+        # Lógica de redirecionamento pós-login
+        if st.session_state.get('just_logged_in', False):
+            del st.session_state['just_logged_in'] # Consome a flag
+            if is_premium_user_from_db:
+                final_target_page = 'editar_projeto'
+                if current_page_on_entry != 'editar_projeto':
+                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
+                    st.rerun(); return
+
+        # Only perform trial check if Firebase is initialized and user UID is available
+        if not is_premium_user_from_db and user_uid and FIREBASE_APP_INITIALIZED: # Só verifica trial para não-premium
             try:
                 db = firestore.client()
                 # Query the 'usuarios' collection by the 'uid' field
@@ -497,34 +512,33 @@ def main():
                 if 'forced_profile_view' in st.session_state:
                      del st.session_state['forced_profile_view']
 
-        # --- Routing for Authenticated Users ---
-        # If forced to profile (trial expired) and the user is trying to access a page
-        # other than 'perfil' or 'pagamento_upgrade', redirect them to 'perfil'.
-        if st.session_state.get('forced_profile_view', False) and \
-           current_page not in ['perfil', 'pagamento_upgrade']:
-            # If the current page is not allowed, force to profile
-            if st.session_state[PAGINA_ATUAL_SESSION_KEY] != 'perfil':
-                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
-                st.rerun() # Rerun to render the profile page
-            # If already on 'perfil' due to this logic, no rerun needed, it will render profile.
+            # Se forced_profile_view for True (e não é premium), e a página alvo não for perfil/pagamento, muda para perfil
+            if st.session_state.get('forced_profile_view', False) and \
+               final_target_page not in ['perfil', 'pagamento_upgrade']:
+                final_target_page = 'perfil'
+                if current_page_on_entry != 'perfil':
+                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
+                    st.rerun(); return
+
         # Else, proceed with normal routing based on current_page
-        elif current_page == 'projetos':
+        # --- Routing for Authenticated Users (usa final_target_page) ---
+        if final_target_page == 'projetos':
             pagina_projetos()
-        elif current_page == 'novo_projeto':
+        elif final_target_page == 'novo_projeto':
             pagina_novo_projeto()
-        elif current_page == 'editar_projeto':
+        elif final_target_page == 'editar_projeto':
             pagina_editar_projeto_view() 
-        elif current_page == 'pagamento_upgrade': # Adicionar esta rota
+        elif final_target_page == 'pagamento_upgrade':
             pagina_pagamento_upgrade()
-        elif current_page == 'payment_success': # Nova rota
+        elif final_target_page == 'payment_success':
             pagina_payment_success()
-        elif current_page == 'payment_failure': # Nova rota
+        elif final_target_page == 'payment_failure':
             pagina_payment_failure()
-        elif current_page == 'payment_pending': # Nova rota
+        elif final_target_page == 'payment_pending':
             pagina_payment_pending()
-        elif current_page == 'perfil': # Nova rota
+        elif final_target_page == 'perfil':
             pagina_perfil()
-        elif current_page == 'cadastro_edital':
+        elif final_target_page == 'cadastro_edital':
             pagina_cadastro_edital() 
         else:
             # Fallback for unknown authenticated page
