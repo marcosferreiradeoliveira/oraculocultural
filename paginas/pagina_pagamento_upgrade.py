@@ -34,8 +34,8 @@ def pagina_pagamento_upgrade():
         🔍 **Modo de Teste Ativo**
         
         Para testar o pagamento, use estas credenciais:
-        - Email: test_user_123456@testuser.com
-        - Senha: qatest1234
+        - Email: TESTUSER973178250
+        - Senha: ZmCuO5A5sm
         
         Este é um ambiente de teste. Nenhum valor real será cobrado.
         """)
