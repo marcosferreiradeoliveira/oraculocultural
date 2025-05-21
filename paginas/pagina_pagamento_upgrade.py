@@ -7,15 +7,11 @@ import uuid
 # Função para obter a URL base da aplicação
 def get_base_url():
     if hasattr(st, 'secrets'):
-        if "STREAMLIT_BASE_URL" in st.secrets:
-            base_url_from_secrets = st.secrets.get("STREAMLIT_BASE_URL")
-            if base_url_from_secrets:
-                return base_url_from_secrets
-        elif "mercadopago" in st.secrets and "STREAMLIT_BASE_URL" in st.secrets.mercadopago:
+        if "mercadopago" in st.secrets and "STREAMLIT_BASE_URL" in st.secrets.mercadopago:
             base_url_from_secrets = st.secrets.mercadopago.get("STREAMLIT_BASE_URL")
             if base_url_from_secrets:
-                return base_url_from_secrets
-    return os.getenv("STREAMLIT_BASE_URL", "http://localhost:8501")
+                return base_url_from_secrets.rstrip('/')
+    return os.getenv("STREAMLIT_BASE_URL", "https://oraculocultural.streamlit.app").rstrip('/')
 
 def get_mercadopago_credentials():
     """
@@ -218,7 +214,6 @@ def pagina_pagamento_upgrade():
             sdk = mercadopago.SDK(mp_access_token)
             base_url = get_base_url()
             preference_id = str(uuid.uuid4())
-            base_url = base_url.rstrip('/')
 
             preference_data = {
                 "items": [
@@ -235,9 +230,9 @@ def pagina_pagamento_upgrade():
                     "entity_type": "individual"
                 },
                 "back_urls": {
-                    "success": f"{base_url}?page=payment_success",
-                    "failure": f"{base_url}?page=payment_failure",
-                    "pending": f"{base_url}?page=payment_pending"
+                    "success": f"{base_url}/payment_success",
+                    "failure": f"{base_url}/payment_failure",
+                    "pending": f"{base_url}/payment_pending"
                 },
                 "auto_return": "approved",
                 "external_reference": user_uid,
