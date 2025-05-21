@@ -119,7 +119,7 @@ def pagina_pagamento_upgrade():
                 "items": [
                     {
                         "id": "premium_plan_monthly_01",
-                        "title": "Plano Premium Mensal - Oráculo Cultural",
+                        "title": "Plano Premium Mensal - Oráculo Cultural (R$ 0,01)",
                         "quantity": 1,
                         "currency_id": "BRL",
                         "unit_price": 0.01
