@@ -206,8 +206,7 @@ def pagina_pagamento_upgrade():
                     "user_uid": user_uid,
                     "plan_id": "premium_monthly",
                     "preference_id": preference_id
-                },
-                "collector_id": 1791046513  # ID do vendedor de teste como número
+                }
             }
 
             preference_response = sdk.preference().create(preference_data)
