@@ -28,20 +28,38 @@ def get_mercadopago_credentials():
         'public_key': None
     }
     
+    # Debug: Verificar se st.secrets está disponível
+    st.write("Debug - Verificando disponibilidade de st.secrets:")
+    if hasattr(st, 'secrets'):
+        st.write("✅ st.secrets está disponível")
+        # Debug: Listar todas as seções disponíveis em st.secrets
+        st.write("Seções disponíveis em st.secrets:", list(st.secrets.keys()))
+    else:
+        st.write("❌ st.secrets não está disponível")
+    
     # Primeiro tenta carregar do .env
     if os.path.exists(".env"):
         from dotenv import load_dotenv
         load_dotenv()
         credentials['access_token'] = os.getenv("MP_ACCESS_TOKEN")
         credentials['public_key'] = os.getenv("MP_PUBLIC_KEY")
+        if credentials['access_token']:
+            st.write("✅ Credenciais encontradas no arquivo .env")
     
     # Se não encontrou no .env, tenta do st.secrets
     if not credentials['access_token'] and hasattr(st, 'secrets'):
         try:
-            mercadopago_secrets = st.secrets.get("mercadopago", {})
-            if isinstance(mercadopago_secrets, dict):
-                credentials['access_token'] = mercadopago_secrets.get("access_token")
-                credentials['public_key'] = mercadopago_secrets.get("public_key")
+            # Debug: Verificar se a seção mercadopago existe
+            if "mercadopago" in st.secrets:
+                st.write("✅ Seção 'mercadopago' encontrada em st.secrets")
+                mercadopago_secrets = st.secrets.mercadopago
+                if isinstance(mercadopago_secrets, dict):
+                    credentials['access_token'] = mercadopago_secrets.get("access_token")
+                    credentials['public_key'] = mercadopago_secrets.get("public_key")
+                    if credentials['access_token']:
+                        st.write("✅ Credenciais carregadas de st.secrets.mercadopago")
+            else:
+                st.write("❌ Seção 'mercadopago' não encontrada em st.secrets")
         except Exception as e:
             st.error(f"Erro ao carregar credenciais do st.secrets: {str(e)}")
     
@@ -56,6 +74,8 @@ def get_mercadopago_credentials():
         # Mostrar apenas os primeiros 10 caracteres do token
         token_preview = credentials['access_token'][:10] + "..." if credentials['access_token'] else "Não definido"
         st.write(f"Token (primeiros 10 caracteres): {token_preview}")
+    else:
+        st.error("❌ Nenhuma credencial foi encontrada em nenhuma fonte")
     
     return credentials
 
