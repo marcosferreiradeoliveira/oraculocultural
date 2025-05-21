@@ -112,6 +112,7 @@ def pagina_pagamento_upgrade():
             st.rerun()
         return
     user_uid = user_info.get('uid')
+    payer_email = user_info.get('email') # Get the email of the logged-in user (the buyer)
 
     # Detalhes do Plano
     st.subheader("Plano Premium Mensal")
@@ -189,6 +190,9 @@ def pagina_pagamento_upgrade():
                         "unit_price": 249.00
                     }
                 ],
+                "payer": {
+                    "email": payer_email  # Explicitly set the payer's email
+                },
                 "back_urls": {
                     "success": f"{base_url}?page=payment_success",
                     "failure": f"{base_url}?page=payment_failure",
