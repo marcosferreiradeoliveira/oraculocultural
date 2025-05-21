@@ -26,25 +26,82 @@ def pagina_pagamento_upgrade():
     Página de Upgrade de Plano
     """
     st.title("🚀 Upgrade para o Plano Premium")
+    
+    # Botão de logout no topo
+    if st.button("🚪 Fazer Logout", key="logout_top"):
+        st.session_state.clear()
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+        st.rerun()
+
     st.markdown("Desbloqueie todos os recursos e eleve seus projetos culturais ao próximo nível!")
 
-    # Informações para ambiente de teste
-    if os.getenv("MP_ACCESS_TOKEN", "").startswith("TEST-"):
-        st.info("""
-        🔍 **Modo de Teste Ativo**
-        
-        Para testar o pagamento, use estas credenciais:
-        
-        **Comprador (Buyer):**
-        - Email: TESTUSER973178250
-        - Senha: ZmCuO5A5sm
-        
-        **Vendedor (Seller):**
-        - Email: TESTUSER1791046513
-        - Senha: XbmUmu6eEV
-        
-        Este é um ambiente de teste. Nenhum valor real será cobrado.
-        """)
+    # --- Check for Test Environment and Seller Conflict ---
+    mp_access_token_for_check = None
+    # 1. Try .env (local dev)
+    if os.path.exists(".env"): # Check if .env exists for local development
+        from dotenv import load_dotenv
+        load_dotenv() # Load .env if it exists
+        mp_access_token_for_check = os.getenv("MP_ACCESS_TOKEN")
+    # 2. Try st.secrets (production/cloud)
+    if not mp_access_token_for_check and hasattr(st, 'secrets'):
+        mercadopago_secrets_check = st.secrets.get("mercadopago", {})
+        mp_access_token_for_check = mercadopago_secrets_check.get("access_token")
+
+    if mp_access_token_for_check and mp_access_token_for_check.startswith("TEST-"):
+        # This block executes if a TEST token is found
+        current_user_email = st.session_state.get(USER_SESSION_KEY, {}).get('email', '')
+        # Este é o email do vendedor de teste associado ao seu TEST TOKEN
+        seller_test_email = "testuser1791046513@testuser.com" 
+
+        if current_user_email == seller_test_email:
+            # Usuário está logado como o vendedor associado ao TEST token
+            st.error(f"""
+            ⚠️ **Atenção: Pagamento Bloqueado!**
+
+            Você está logado no aplicativo como **{current_user_email}**, que é o email da conta **VENDEDORA** de teste do Mercado Pago associada a este ambiente.
+            O Mercado Pago **não permite que o vendedor pague a si mesmo.**
+
+            **Para testar o pagamento corretamente, você precisa:**
+            1.  Clique no botão "🚪 Fazer Logout para trocar de usuário" abaixo.
+            2.  Na tela de login, utilize as credenciais da conta **COMPRADORA** de teste:
+                -   **Email (Comprador):** `testuser973178250@testuser.com`
+                -   **Senha (Comprador):** `ZmCuO5A5sm`
+            3.  Após logar como comprador, retorne a esta página para tentar o pagamento.
+
+            **Credenciais de Teste Completas:**
+            -   **Vendedor (SELLER):**
+                -   Email: `{seller_test_email}`
+                -   Senha: `XbmUmu6eEV`
+            -   **Comprador (BUYER):**
+                -   Email: `testuser973178250@testuser.com`
+                -   Senha: `ZmCuO5A5sm`
+            """)
+            if st.button("🚪 Fazer Logout para trocar de usuário", key="logout_seller_conflict"):
+                # Limpar sessão de forma mais completa
+                st.session_state.clear()
+                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+                st.rerun()
+            return # CRUCIAL: Impede a renderização do restante da página de pagamento
+        else:
+            # Usuário está logado, é um ambiente de TESTE, mas o usuário NÃO é o vendedor. Mostrar informações.
+            st.info(f"""
+            🔍 **Modo de Teste Ativo**
+
+            Você está logado como: `{current_user_email}`.
+            Para que o teste de pagamento funcione, certifique-se de que você **NÃO** está usando o email do vendedor (`{seller_test_email}`).
+            
+            **Credenciais de Teste de Referência:**
+            -   **Vendedor (SELLER):**
+                -   Email: `{seller_test_email}`
+                -   Senha: `XbmUmu6eEV`
+            -   **Comprador (BUYER):**
+                -   Email: `testuser973178250@testuser.com`
+                -   Senha: `ZmCuO5A5sm`
+
+            Se você estivesse logado como `{seller_test_email}`, o pagamento falharia com a mensagem "Não é possível pagar para você mesmo."
+            Este é um ambiente de teste. Nenhum valor real será cobrado.
+            """)
+    # --- Fim da Verificação de Ambiente de Teste e Conflito de Vendedor ---
 
     # Recuperar informações do usuário para o external_reference
     user_info = st.session_state.get(USER_SESSION_KEY)
@@ -76,19 +133,33 @@ def pagina_pagamento_upgrade():
         try:
             mp_access_token = None
             
-            # 1. Tentar carregar do .env primeiro (ideal para desenvolvimento local)
-            if os.path.exists(".env"):
+            # 1. Tentar carregar do .env primeiro (desenvolvimento local)
+            # A verificação de os.path.exists e load_dotenv já foi feita acima para mp_access_token_for_check
+            # Podemos reutilizar mp_access_token_for_check se ele foi carregado, ou tentar carregar de novo.
+            # Para consistência, vamos usar a mesma lógica de carregamento aqui.
+            if os.path.exists(".env"): # Garante que .env seja verificado se existir
+                from dotenv import load_dotenv
+                load_dotenv()
                 mp_access_token = os.getenv("MP_ACCESS_TOKEN")
-                print(f"DEBUG: MP_ACCESS_TOKEN from .env: {'Found' if mp_access_token else 'Not found'}")
 
-            # 2. Se não encontrou no .env, tentar carregar de st.secrets (para produção)
-            if not mp_access_token:
-                if hasattr(st, 'secrets'):
-                    mercadopago_secrets = st.secrets.get("mercadopago", {})
-                    mp_access_token = mercadopago_secrets.get("access_token")
-                    print(f"DEBUG: MP_ACCESS_TOKEN from st.secrets: {'Found' if mp_access_token else 'Not found'}")
-                else:
-                    print("DEBUG: st.secrets not available")
+            if not mp_access_token and hasattr(st, 'secrets'): # Fallback para st.secrets
+                mercadopago_secrets = st.secrets.get("mercadopago", {})
+                mp_access_token = mercadopago_secrets.get("access_token")
+                print(f"DEBUG: MP_ACCESS_TOKEN from st.secrets: {'Found' if mp_access_token else 'Not found'}")
+            # Ajuste: O 'else' abaixo deve estar no mesmo nível do 'if hasattr(st, 'secrets')' se a intenção fosse essa.
+            # No entanto, a lógica atual é que este 'else' é para o 'if not mp_access_token and hasattr(st, 'secrets')'
+            # A correção é alinhar este bloco com o 'if' da linha 147.
+            # A mensagem "st.secrets not available" só faz sentido se hasattr(st, 'secrets') for falso.
+            # A estrutura atual do if/else está correta se o 'else' for para o 'if' composto.
+            # O problema é puramente de indentação excessiva nas linhas 148-152 do original.
+            # A correção abaixo assume que o 'else' é para o 'if' da linha 147.
+            # No entanto, a mensagem "st.secrets not available" é mais apropriada para um 'else' de 'hasattr(st, 'secrets')'
+            # Se a intenção é "se não conseguiu token do .env E st.secrets não está disponível", a lógica precisaria mudar.
+            # Vou corrigir a indentação conforme o erro reportado, mantendo a lógica do if/else como está.
+            # O erro de Pylance na linha 149 é porque o bloco inteiro (148-150) e o else (151-152) estão super-indentados.
+            # Reduzindo a indentação de todo esse segmento:
+            elif not mp_access_token: # Se ainda não tem token E st.secrets não está disponível (ou não tem a chave)
+                print("DEBUG: Token not found in .env and st.secrets might be unavailable or missing the token.")
             
             if not mp_access_token:
                 st.error("Credenciais do Mercado Pago não configuradas. Por favor, configure MP_ACCESS_TOKEN no arquivo .env (desenvolvimento) ou em st.secrets (produção).")
