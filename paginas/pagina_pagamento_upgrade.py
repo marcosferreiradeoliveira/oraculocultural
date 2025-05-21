@@ -81,6 +81,20 @@ def pagina_pagamento_upgrade():
         """)
         return
 
+    # Debug: Verificar ambiente das credenciais
+    if mp_access_token.startswith("TEST-"):
+        st.error("⚠️ **ATENÇÃO: Credenciais de TESTE detectadas!**")
+        st.warning("""
+        Você está usando credenciais do ambiente de teste (sandbox).
+        Para usar o ambiente de produção, você precisa:
+        1. Usar um access token que começa com 'APP_USR-'
+        2. Usar uma public key de produção
+        """)
+    elif mp_access_token.startswith("APP_USR-"):
+        st.success("✅ Credenciais de PRODUÇÃO detectadas!")
+    else:
+        st.warning("⚠️ Não foi possível determinar o ambiente das credenciais.")
+
     # Recuperar informações do usuário
     user_info = st.session_state.get(USER_SESSION_KEY)
     if not user_info or not user_info.get('uid'):
@@ -110,6 +124,11 @@ def pagina_pagamento_upgrade():
 
     if st.button("💳 Pagar com Mercado Pago e Ativar Premium", type="primary", use_container_width=True):
         try:
+            # Debug: Mostrar informações sobre as credenciais
+            st.write("Debug - Informações do ambiente:")
+            st.write(f"Access Token (primeiros 10 caracteres): {mp_access_token[:10]}...")
+            st.write(f"Public Key (primeiros 10 caracteres): {mp_public_key[:10] if mp_public_key else 'Não definida'}...")
+            
             # Inicializar SDK com o access token de produção
             sdk = mercadopago.SDK(mp_access_token)
             base_url = get_base_url()
@@ -157,6 +176,11 @@ def pagina_pagamento_upgrade():
             if preference_response["status"] == 201:
                 init_point = preference["init_point"]
                 st.session_state['mp_preference_id'] = preference["id"]
+                
+                # Debug: Mostrar informações da URL de pagamento
+                st.write("Debug - URL de pagamento:")
+                st.write(f"URL completa: {init_point}")
+                st.write(f"Contém 'sandbox' na URL: {'sandbox' in init_point.lower()}")
                 
                 st.info(f"""
                 ✅ **Preferência criada com sucesso!**
