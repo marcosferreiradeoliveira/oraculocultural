@@ -28,6 +28,17 @@ def get_mercadopago_credentials():
         'public_key': None
     }
     
+    # Debug: Mostrar todas as credenciais disponíveis
+    st.write("Debug - Credenciais disponíveis:")
+    if os.path.exists(".env"):
+        from dotenv import load_dotenv
+        load_dotenv()
+        st.write("Token do .env:", os.getenv("MP_ACCESS_TOKEN"))
+    
+    if hasattr(st, 'secrets'):
+        mercadopago_secrets = st.secrets.get("mercadopago", {})
+        st.write("Token do st.secrets:", mercadopago_secrets.get("access_token"))
+    
     # 1. Tentar carregar do .env
     if os.path.exists(".env"):
         from dotenv import load_dotenv
@@ -50,6 +61,9 @@ def get_mercadopago_credentials():
             st.write("Credenciais carregadas do arquivo .env")
         elif hasattr(st, 'secrets') and st.secrets.get("mercadopago", {}).get("access_token") == credentials['access_token']:
             st.write("Credenciais carregadas do st.secrets")
+        
+        # Mostrar o token que está sendo usado
+        st.write("Token que será usado:", credentials['access_token'])
     
     return credentials
 
