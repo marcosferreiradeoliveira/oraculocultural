@@ -52,16 +52,46 @@ def get_mercadopago_credentials():
             # Debug: Verificar se a seção mercadopago existe
             if "mercadopago" in st.secrets:
                 st.write("✅ Seção 'mercadopago' encontrada em st.secrets")
-                mercadopago_secrets = st.secrets.mercadopago
-                if isinstance(mercadopago_secrets, dict):
-                    credentials['access_token'] = mercadopago_secrets.get("access_token")
-                    credentials['public_key'] = mercadopago_secrets.get("public_key")
-                    if credentials['access_token']:
-                        st.write("✅ Credenciais carregadas de st.secrets.mercadopago")
+                
+                # Debug: Mostrar conteúdo da seção mercadopago
+                st.write("Debug - Conteúdo da seção mercadopago:")
+                mercadopago_content = st.secrets.mercadopago
+                st.write("Tipo do conteúdo:", type(mercadopago_content))
+                st.write("Chaves disponíveis:", list(mercadopago_content.keys()) if isinstance(mercadopago_content, dict) else "Não é um dicionário")
+                
+                if isinstance(mercadopago_content, dict):
+                    # Tentar diferentes formas de acessar as credenciais
+                    access_token = (
+                        mercadopago_content.get("access_token") or
+                        mercadopago_content.get("ACCESS_TOKEN") or
+                        mercadopago_content.get("token")
+                    )
+                    public_key = (
+                        mercadopago_content.get("public_key") or
+                        mercadopago_content.get("PUBLIC_KEY") or
+                        mercadopago_content.get("key")
+                    )
+                    
+                    if access_token:
+                        credentials['access_token'] = access_token
+                        st.write("✅ Access token encontrado")
+                    else:
+                        st.write("❌ Access token não encontrado nas chaves disponíveis")
+                    
+                    if public_key:
+                        credentials['public_key'] = public_key
+                        st.write("✅ Public key encontrada")
+                    else:
+                        st.write("❌ Public key não encontrada nas chaves disponíveis")
+                else:
+                    st.write("❌ Conteúdo da seção mercadopago não é um dicionário")
             else:
                 st.write("❌ Seção 'mercadopago' não encontrada em st.secrets")
         except Exception as e:
             st.error(f"Erro ao carregar credenciais do st.secrets: {str(e)}")
+            import traceback
+            st.write("Stack trace completo:")
+            st.code(traceback.format_exc())
     
     # Debug: Mostrar fonte das credenciais (sem mostrar os tokens completos)
     if credentials['access_token']:
