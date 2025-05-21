@@ -104,7 +104,7 @@ def pagina_pagamento_upgrade():
         - **Geração de documentos** em múltiplos formatos.
         - **Suporte prioritário** e personalizado.
         ---
-        ### **Valor: R$ 0,01 / mês**
+        ### **Valor: R$ 1,00 / mês**
         """
     )
 
@@ -120,10 +120,10 @@ def pagina_pagamento_upgrade():
                 "items": [
                     {
                         "id": "premium_plan_monthly_01",
-                        "title": "Plano Premium Mensal - Oráculo Cultural (R$ 0,01)",
+                        "title": "Plano Premium Mensal - Oráculo Cultural (R$ 1,00)",
                         "quantity": 1,
                         "currency_id": "BRL",
-                        "unit_price": 0.01
+                        "unit_price": 1.00
                     }
                 ],
                 "payer": {
