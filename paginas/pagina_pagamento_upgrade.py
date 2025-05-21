@@ -19,7 +19,7 @@ def get_base_url():
 
 def get_mercadopago_credentials():
     """
-    Obtém as credenciais do Mercado Pago, priorizando:
+    Obtém as credenciais do Mercado Pago, priorizando: as
     1. Variáveis de ambiente (.env)
     2. st.secrets
     """
