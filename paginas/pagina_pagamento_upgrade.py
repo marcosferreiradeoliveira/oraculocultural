@@ -28,6 +28,18 @@ def pagina_pagamento_upgrade():
     st.title("🚀 Upgrade para o Plano Premium")
     st.markdown("Desbloqueie todos os recursos e eleve seus projetos culturais ao próximo nível!")
 
+    # Informações para ambiente de teste
+    if os.getenv("MP_ACCESS_TOKEN", "").startswith("TEST-"):
+        st.info("""
+        🔍 **Modo de Teste Ativo**
+        
+        Para testar o pagamento, use estas credenciais:
+        - Email: test_user_123456@testuser.com
+        - Senha: qatest1234
+        
+        Este é um ambiente de teste. Nenhum valor real será cobrado.
+        """)
+
     # Recuperar informações do usuário para o external_reference
     user_info = st.session_state.get(USER_SESSION_KEY)
     if not user_info or not user_info.get('uid'):
