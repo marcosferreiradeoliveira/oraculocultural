@@ -110,12 +110,8 @@ def pagina_pagamento_upgrade():
 
     if st.button("💳 Pagar com Mercado Pago e Ativar Premium", type="primary", use_container_width=True):
         try:
+            # Inicializar SDK com o access token de produção
             sdk = mercadopago.SDK(mp_access_token)
-            # Forçar ambiente de produção
-            sdk.configure({
-                "sandbox": False,
-                "production": True
-            })
             base_url = get_base_url()
             preference_id = str(uuid.uuid4())
             base_url = base_url.rstrip('/')
