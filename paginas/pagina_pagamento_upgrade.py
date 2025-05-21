@@ -162,12 +162,14 @@ def pagina_pagamento_upgrade():
                     "user_uid": user_uid,
                     "plan_id": "premium_monthly",
                     "preference_id": preference_id,
-                    "payer_email": payer_email
+                    "payer_email": payer_email,
+                    "valor": 1.00
                 }
             }
 
             # Debug: Mostrar dados da preferência (exceto token)
             st.write("Dados da preferência sendo enviados:")
+            st.write("Valor do item:", preference_data["items"][0]["unit_price"])
             st.json({k: v for k, v in preference_data.items() if k != "token"})
 
             preference_response = sdk.preference().create(preference_data)
