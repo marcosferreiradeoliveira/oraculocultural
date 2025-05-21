@@ -28,31 +28,34 @@ def get_mercadopago_credentials():
         'public_key': None
     }
     
-    # Debug: Mostrar todas as credenciais disponíveis
-    st.write("Debug - Credenciais disponíveis:")
+    # Primeiro tenta carregar do .env
     if os.path.exists(".env"):
         from dotenv import load_dotenv
         load_dotenv()
-        st.write("Token do .env:", os.getenv("MP_ACCESS_TOKEN"))
+        credentials['access_token'] = os.getenv("MP_ACCESS_TOKEN")
+        credentials['public_key'] = os.getenv("MP_PUBLIC_KEY")
     
-    if hasattr(st, 'secrets'):
-        # Pegar diretamente da seção principal do mercadopago
-        mercadopago_secrets = st.secrets.get("mercadopago", {})
-        if isinstance(mercadopago_secrets, dict):
-            credentials['access_token'] = mercadopago_secrets.get("access_token")
-            credentials['public_key'] = mercadopago_secrets.get("public_key")
-            st.write("Token do st.secrets:", credentials['access_token'])
+    # Se não encontrou no .env, tenta do st.secrets
+    if not credentials['access_token'] and hasattr(st, 'secrets'):
+        try:
+            mercadopago_secrets = st.secrets.get("mercadopago", {})
+            if isinstance(mercadopago_secrets, dict):
+                credentials['access_token'] = mercadopago_secrets.get("access_token")
+                credentials['public_key'] = mercadopago_secrets.get("public_key")
+        except Exception as e:
+            st.error(f"Erro ao carregar credenciais do st.secrets: {str(e)}")
     
-    # Debug: Mostrar de onde as credenciais estão vindo
+    # Debug: Mostrar fonte das credenciais (sem mostrar os tokens completos)
     if credentials['access_token']:
         st.write("Debug - Fonte das credenciais:")
         if os.path.exists(".env") and os.getenv("MP_ACCESS_TOKEN") == credentials['access_token']:
-            st.write("Credenciais carregadas do arquivo .env")
+            st.write("✅ Credenciais carregadas do arquivo .env")
         elif hasattr(st, 'secrets'):
-            st.write("Credenciais carregadas do st.secrets")
+            st.write("✅ Credenciais carregadas do st.secrets")
         
-        # Mostrar o token que está sendo usado
-        st.write("Token que será usado:", credentials['access_token'])
+        # Mostrar apenas os primeiros 10 caracteres do token
+        token_preview = credentials['access_token'][:10] + "..." if credentials['access_token'] else "Não definido"
+        st.write(f"Token (primeiros 10 caracteres): {token_preview}")
     
     return credentials
 
