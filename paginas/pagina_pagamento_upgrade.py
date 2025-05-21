@@ -24,103 +24,26 @@ def get_mercadopago_credentials():
         'public_key': None
     }
     
-    # Debug: Verificar se st.secrets está disponível
-    st.write("Debug - Verificando disponibilidade de st.secrets:")
-    if hasattr(st, 'secrets'):
-        st.write("✅ st.secrets está disponível")
-        # Debug: Listar todas as seções disponíveis em st.secrets
-        st.write("Seções disponíveis em st.secrets:", list(st.secrets.keys()))
-    else:
-        st.write("❌ st.secrets não está disponível")
-    
     # Primeiro tenta carregar do .env
     if os.path.exists(".env"):
         from dotenv import load_dotenv
         load_dotenv()
         credentials['access_token'] = os.getenv("MP_ACCESS_TOKEN")
         credentials['public_key'] = os.getenv("MP_PUBLIC_KEY")
-        if credentials['access_token']:
-            st.write("✅ Credenciais encontradas no arquivo .env")
     
     # Se não encontrou no .env, tenta do st.secrets
     if not credentials['access_token'] and hasattr(st, 'secrets'):
         try:
-            # Debug: Verificar se a seção mercadopago existe
             if "mercadopago" in st.secrets:
-                st.write("✅ Seção 'mercadopago' encontrada em st.secrets")
-                
-                # Debug: Mostrar conteúdo da seção mercadopago
-                st.write("Debug - Conteúdo da seção mercadopago:")
                 mercadopago_content = st.secrets.mercadopago
-                
-                # Converter AttrDict para dicionário se necessário
                 if hasattr(mercadopago_content, 'to_dict'):
                     mercadopago_content = mercadopago_content.to_dict()
                 
-                st.write("Tipo do conteúdo:", type(mercadopago_content))
-                st.write("Chaves disponíveis:", list(mercadopago_content.keys()) if isinstance(mercadopago_content, dict) else "Não é um dicionário")
-                
-                # Tentar acessar as credenciais diretamente do objeto
-                try:
-                    access_token = getattr(mercadopago_content, 'access_token', None)
-                    if not access_token and isinstance(mercadopago_content, dict):
-                        access_token = mercadopago_content.get('access_token')
-                    
-                    public_key = getattr(mercadopago_content, 'public_key', None)
-                    if not public_key and isinstance(mercadopago_content, dict):
-                        public_key = mercadopago_content.get('public_key')
-                    
-                    if access_token:
-                        credentials['access_token'] = access_token
-                        st.write("✅ Access token encontrado")
-                    else:
-                        st.write("❌ Access token não encontrado")
-                        st.write("Tentando acessar diretamente do st.secrets.mercadopago.access_token")
-                        try:
-                            access_token = st.secrets.mercadopago.access_token
-                            if access_token:
-                                credentials['access_token'] = access_token
-                                st.write("✅ Access token encontrado via acesso direto")
-                        except Exception as e:
-                            st.write(f"❌ Erro ao acessar access_token diretamente: {str(e)}")
-                    
-                    if public_key:
-                        credentials['public_key'] = public_key
-                        st.write("✅ Public key encontrada")
-                    else:
-                        st.write("❌ Public key não encontrada")
-                        st.write("Tentando acessar diretamente do st.secrets.mercadopago.public_key")
-                        try:
-                            public_key = st.secrets.mercadopago.public_key
-                            if public_key:
-                                credentials['public_key'] = public_key
-                                st.write("✅ Public key encontrada via acesso direto")
-                        except Exception as e:
-                            st.write(f"❌ Erro ao acessar public_key diretamente: {str(e)}")
-                    
-                except Exception as e:
-                    st.write(f"❌ Erro ao acessar credenciais: {str(e)}")
-            else:
-                st.write("❌ Seção 'mercadopago' não encontrada em st.secrets")
+                if isinstance(mercadopago_content, dict):
+                    credentials['access_token'] = mercadopago_content.get('access_token')
+                    credentials['public_key'] = mercadopago_content.get('public_key')
         except Exception as e:
-            st.error(f"Erro ao carregar credenciais do st.secrets: {str(e)}")
-            import traceback
-            st.write("Stack trace completo:")
-            st.code(traceback.format_exc())
-    
-    # Debug: Mostrar fonte das credenciais (sem mostrar os tokens completos)
-    if credentials['access_token']:
-        st.write("Debug - Fonte das credenciais:")
-        if os.path.exists(".env") and os.getenv("MP_ACCESS_TOKEN") == credentials['access_token']:
-            st.write("✅ Credenciais carregadas do arquivo .env")
-        elif hasattr(st, 'secrets'):
-            st.write("✅ Credenciais carregadas do st.secrets")
-        
-        # Mostrar apenas os primeiros 10 caracteres do token
-        token_preview = credentials['access_token'][:10] + "..." if credentials['access_token'] else "Não definido"
-        st.write(f"Token (primeiros 10 caracteres): {token_preview}")
-    else:
-        st.error("❌ Nenhuma credencial foi encontrada em nenhuma fonte")
+            st.error("Erro ao carregar credenciais do Mercado Pago")
     
     return credentials
 
@@ -144,37 +67,8 @@ def pagina_pagamento_upgrade():
     mp_public_key = credentials['public_key']
 
     if not mp_access_token:
-        st.error("""
-        ❌ **Credenciais do Mercado Pago não configuradas**
-        
-        Por favor, configure as credenciais em:
-        1. Arquivo `.env` (desenvolvimento local):
-           ```
-           MP_ACCESS_TOKEN=seu_access_token
-           MP_PUBLIC_KEY=sua_public_key
-           ```
-        2. Ou em `st.secrets` (produção):
-           ```toml
-           [mercadopago]
-           access_token = "seu_access_token"
-           public_key = "sua_public_key"
-           ```
-        """)
+        st.error("Credenciais do Mercado Pago não configuradas")
         return
-
-    # Debug: Verificar ambiente das credenciais
-    if mp_access_token.startswith("TEST-"):
-        st.error("⚠️ **ATENÇÃO: Credenciais de TESTE detectadas!**")
-        st.warning("""
-        Você está usando credenciais do ambiente de teste (sandbox).
-        Para usar o ambiente de produção, você precisa:
-        1. Usar um access token que começa com 'APP_USR-'
-        2. Usar uma public key de produção
-        """)
-    elif mp_access_token.startswith("APP_USR-"):
-        st.success("✅ Credenciais de PRODUÇÃO detectadas!")
-    else:
-        st.warning("⚠️ Não foi possível determinar o ambiente das credenciais.")
 
     # Recuperar informações do usuário
     user_info = st.session_state.get(USER_SESSION_KEY)
@@ -205,12 +99,6 @@ def pagina_pagamento_upgrade():
 
     if st.button("💳 Pagar com Mercado Pago e Ativar Premium", type="primary", use_container_width=True):
         try:
-            # Debug: Mostrar informações sobre as credenciais
-            st.write("Debug - Informações do ambiente:")
-            st.write(f"Access Token (primeiros 10 caracteres): {mp_access_token[:10]}...")
-            st.write(f"Public Key (primeiros 10 caracteres): {mp_public_key[:10] if mp_public_key else 'Não definida'}...")
-            
-            # Inicializar SDK com o access token de produção
             sdk = mercadopago.SDK(mp_access_token)
             base_url = get_base_url()
             preference_id = str(uuid.uuid4())
@@ -230,9 +118,9 @@ def pagina_pagamento_upgrade():
                     "entity_type": "individual"
                 },
                 "back_urls": {
-                    "success": f"{base_url}/payment_success",
-                    "failure": f"{base_url}/payment_failure",
-                    "pending": f"{base_url}/payment_pending"
+                    "success": f"{base_url}?page=payment_success",
+                    "failure": f"{base_url}?page=payment_failure",
+                    "pending": f"{base_url}?page=payment_pending"
                 },
                 "auto_return": "approved",
                 "external_reference": user_uid,
@@ -247,58 +135,19 @@ def pagina_pagamento_upgrade():
                 }
             }
 
-            # Debug: Mostrar dados da preferência (exceto token)
-            st.write("Dados da preferência sendo enviados:")
-            st.write("Valor do item:", preference_data["items"][0]["unit_price"])
-            st.json({k: v for k, v in preference_data.items() if k != "token"})
-
             preference_response = sdk.preference().create(preference_data)
             preference = preference_response["response"]
 
             if preference_response["status"] == 201:
                 init_point = preference["init_point"]
                 st.session_state['mp_preference_id'] = preference["id"]
-                
-                # Debug: Mostrar informações da URL de pagamento
-                st.write("Debug - URL de pagamento:")
-                st.write(f"URL completa: {init_point}")
-                st.write(f"Contém 'sandbox' na URL: {'sandbox' in init_point.lower()}")
-                
-                st.info(f"""
-                ✅ **Preferência criada com sucesso!**
-                - ID da Preferência: {preference["id"]}
-                - Status: {preference_response["status"]}
-                - URL de Pagamento: {init_point}
-                """)
-                
-                st.info("Você será redirecionado para o Mercado Pago para concluir o pagamento...")
                 st.markdown(f'<meta http-equiv="refresh" content="3; url={init_point}">', unsafe_allow_html=True)
-                st.markdown(f"Se não for redirecionado automaticamente, [clique aqui para pagar]({init_point}).")
+                st.markdown(f"Você será redirecionado para o Mercado Pago para concluir o pagamento... [Clique aqui se não for redirecionado automaticamente]({init_point}).")
             else:
-                st.error(f"""
-                ❌ **Erro ao criar preferência de pagamento**
-                
-                Detalhes do erro:
-                - Status: {preference_response.get('status')}
-                - Mensagem: {preference_response.get('response', {}).get('message', 'Erro desconhecido')}
-                - Código do erro: {preference_response.get('response', {}).get('error', 'N/A')}
-                """)
-                
-                st.write("Resposta completa do Mercado Pago:")
-                st.json(preference_response)
+                st.error("Erro ao criar preferência de pagamento")
 
         except Exception as e:
-            st.error(f"""
-            ❌ **Ocorreu um erro ao processar o pagamento**
-            
-            Detalhes do erro:
-            - Tipo: {type(e).__name__}
-            - Mensagem: {str(e)}
-            """)
-            
-            import traceback
-            st.write("Stack trace completo:")
-            st.code(traceback.format_exc())
+            st.error("Ocorreu um erro ao processar o pagamento")
 
     # Botão para voltar para a página de perfil
     if st.button("Voltar para Perfil"):
