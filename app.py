@@ -100,7 +100,11 @@ from constants import (
 
 # Importações de páginas (movidas para depois da inicialização do Firebase)
 from paginas.login import pagina_login
-from paginas.pagina_editar_projeto import pagina_editar_projeto as pagina_editar_projeto_view
+try:
+    from paginas.pagina_editar_projeto import pagina_editar_projeto as pagina_editar_projeto_view
+except ImportError as e:
+    st.error(f"Erro ao importar página de edição de projeto: {str(e)}")
+    st.stop()
 from paginas.reset_password import pagina_reset_password
 from paginas.cadastro import pagina_cadastro
 from paginas.pagina_perfil import pagina_perfil # Nova importação
