@@ -171,6 +171,15 @@ def pagina_pagamento_upgrade():
                 st.error("Token do Mercado Pago inválido. O token deve começar com 'TEST-' (ambiente de teste) ou 'APP_USR-' (produção).")
                 return
 
+            # Debug information for test environment
+            if mp_access_token.startswith('TEST-'):
+                st.info(f"""
+                🔍 **Informações de Teste**
+                - Token: {mp_access_token[:10]}... (teste)
+                - Email do Pagador: {payer_email}
+                - Email do Vendedor: testuser1791046513@testuser.com
+                """)
+
             sdk = mercadopago.SDK(mp_access_token)
 
             base_url = get_base_url()
@@ -191,23 +200,29 @@ def pagina_pagamento_upgrade():
                     }
                 ],
                 "payer": {
-                    "email": payer_email  # Explicitly set the payer's email
+                    "email": payer_email,  # Email do comprador
+                    "entity_type": "individual"  # Adicionado para especificar tipo de entidade
                 },
                 "back_urls": {
                     "success": f"{base_url}?page=payment_success",
                     "failure": f"{base_url}?page=payment_failure",
                     "pending": f"{base_url}?page=payment_pending"
                 },
-                "auto_return": "approved",  # Adicionado este parâmetro
+                "auto_return": "approved",
                 "external_reference": user_uid,
                 "notification_url": f"{base_url}/mercadopago_webhook",
                 "statement_descriptor": "ORACULO PREMIUM",
                 "metadata": {
                     "user_uid": user_uid,
                     "plan_id": "premium_monthly",
-                    "preference_id": preference_id
+                    "preference_id": preference_id,
+                    "payer_email": payer_email  # Adicionado para rastreamento
                 }
             }
+
+            # Debug: Mostrar dados da preferência (exceto token)
+            st.write("Dados da preferência sendo enviados:")
+            st.json({k: v for k, v in preference_data.items() if k != "token"})
 
             preference_response = sdk.preference().create(preference_data)
             preference = preference_response["response"]
