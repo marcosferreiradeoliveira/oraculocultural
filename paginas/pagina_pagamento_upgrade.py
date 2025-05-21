@@ -19,7 +19,7 @@ def get_base_url():
 
 def get_mercadopago_credentials():
     """
-    Obtém as credenciais do Mercado Pago, priorizando: as
+    Obtém as credenciais do Mercado Pago, priorizando:
     1. Variáveis de ambiente (.env)
     2. st.secrets
     """
@@ -36,10 +36,20 @@ def get_mercadopago_credentials():
         credentials['public_key'] = os.getenv("MP_PUBLIC_KEY")
     
     # 2. Se não encontrou no .env, tentar do st.secrets
-    if not credentials['access_token'] and hasattr(st, 'secrets'):
+    if hasattr(st, 'secrets'):
         mercadopago_secrets = st.secrets.get("mercadopago", {})
-        credentials['access_token'] = mercadopago_secrets.get("access_token")
-        credentials['public_key'] = mercadopago_secrets.get("public_key")
+        if not credentials['access_token']:
+            credentials['access_token'] = mercadopago_secrets.get("access_token")
+        if not credentials['public_key']:
+            credentials['public_key'] = mercadopago_secrets.get("public_key")
+    
+    # Debug: Mostrar de onde as credenciais estão vindo
+    if credentials['access_token']:
+        st.write("Debug - Fonte das credenciais:")
+        if os.path.exists(".env") and os.getenv("MP_ACCESS_TOKEN") == credentials['access_token']:
+            st.write("Credenciais carregadas do arquivo .env")
+        elif hasattr(st, 'secrets') and st.secrets.get("mercadopago", {}).get("access_token") == credentials['access_token']:
+            st.write("Credenciais carregadas do st.secrets")
     
     return credentials
 
