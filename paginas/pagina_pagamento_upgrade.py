@@ -6,9 +6,19 @@ import uuid # Para gerar IDs únicos se necessário
 
 # Função para obter a URL base da aplicação (ajuste conforme necessário)
 def get_base_url():
-    # Em desenvolvimento local, pode ser http://localhost:8501
-    # Em produção, será a URL do seu aplicativo implantado.
-    # Você pode precisar configurar isso via variável de ambiente ou st.secrets
+    # 1. Tentar obter de st.secrets (para produção no Streamlit Cloud)
+    if hasattr(st, 'secrets'):
+        # Verifica se a chave está diretamente em secrets ou aninhada
+        if "STREAMLIT_BASE_URL" in st.secrets:
+            base_url_from_secrets = st.secrets.get("STREAMLIT_BASE_URL")
+            if base_url_from_secrets:
+                return base_url_from_secrets
+        # Verifica se está aninhada sob [mercadopago] como no seu exemplo
+        elif "mercadopago" in st.secrets and "STREAMLIT_BASE_URL" in st.secrets.mercadopago:
+            base_url_from_secrets = st.secrets.mercadopago.get("STREAMLIT_BASE_URL")
+            if base_url_from_secrets:
+                return base_url_from_secrets
+    # 2. Tentar obter de variável de ambiente (para outros cenários de deploy ou local)
     return os.getenv("STREAMLIT_BASE_URL", "http://localhost:8501")
 
 def pagina_pagamento_upgrade():
@@ -49,54 +59,60 @@ def pagina_pagamento_upgrade():
             mp_access_token = None
             
             # 1. Tentar carregar do .env primeiro (ideal para desenvolvimento local)
-            # Presume-se que load_dotenv() já foi chamado em app.py
-            if os.path.exists(".env"): # Verifica se o arquivo .env existe como um indicador de ambiente local
+            if os.path.exists(".env"):
                 mp_access_token = os.getenv("MP_ACCESS_TOKEN")
-                if mp_access_token:
-                    print("INFO: MP_ACCESS_TOKEN carregado do arquivo .env") # Para depuração
+                print(f"DEBUG: MP_ACCESS_TOKEN from .env: {'Found' if mp_access_token else 'Not found'}")
 
             # 2. Se não encontrou no .env, tentar carregar de st.secrets (para produção)
             if not mp_access_token:
                 if hasattr(st, 'secrets'):
                     mercadopago_secrets = st.secrets.get("mercadopago", {})
                     mp_access_token = mercadopago_secrets.get("access_token")
-                    if mp_access_token:
-                        print("INFO: MP_ACCESS_TOKEN carregado de st.secrets") # Para depuração
+                    print(f"DEBUG: MP_ACCESS_TOKEN from st.secrets: {'Found' if mp_access_token else 'Not found'}")
                 else:
-                    print("INFO: st.secrets não está disponível ou configurado.")
+                    print("DEBUG: st.secrets not available")
             
             if not mp_access_token:
-                st.error("Credenciais do Mercado Pago (MP_ACCESS_TOKEN) não configuradas no arquivo .env (para desenvolvimento local) nem em st.secrets (para produção).")
+                st.error("Credenciais do Mercado Pago não configuradas. Por favor, configure MP_ACCESS_TOKEN no arquivo .env (desenvolvimento) ou em st.secrets (produção).")
+                return
+
+            # Validate token format before using
+            if not mp_access_token.startswith('TEST-') and not mp_access_token.startswith('APP_USR-'):
+                st.error("Token do Mercado Pago inválido. O token deve começar com 'TEST-' (ambiente de teste) ou 'APP_USR-' (produção).")
                 return
 
             sdk = mercadopago.SDK(mp_access_token)
 
             base_url = get_base_url()
-            preference_id = str(uuid.uuid4()) # ID único para esta tentativa de pagamento
+            preference_id = str(uuid.uuid4())
+
+            # Ensure base_url doesn't end with a slash
+            base_url = base_url.rstrip('/')
 
             # Dados da preferência de pagamento
             preference_data = {
                 "items": [
                     {
-                        "id": "premium_plan_monthly_01", # ID do seu item
+                        "id": "premium_plan_monthly_01",
                         "title": "Plano Premium Mensal - Oráculo Cultural",
                         "quantity": 1,
-                        "currency_id": "BRL", # Moeda (Real Brasileiro)
+                        "currency_id": "BRL",
                         "unit_price": 249.00
                     }
                 ],
                 "back_urls": {
-                    "success": f"{base_url}/?page=payment_success&pref_id={preference_id}",
-                    "failure": f"{base_url}/?page=payment_failure&pref_id={preference_id}",
-                    "pending": f"{base_url}/?page=payment_pending&pref_id={preference_id}"
+                    "success": f"{base_url}?page=payment_success",
+                    "failure": f"{base_url}?page=payment_failure",
+                    "pending": f"{base_url}?page=payment_pending"
                 },
-                "auto_return": "approved", # Retorna automaticamente se aprovado
-                "external_reference": user_uid, # Referência externa (ex: ID do usuário)
-                "notification_url": f"{base_url}/mercadopago_webhook?source_news=ipn&user_id={user_uid}&pref_id={preference_id}", # URL para notificações (webhook)
-                "statement_descriptor": "ORACULO PREMIUM", # Descrição na fatura do cartão
-                "metadata": { # Metadados adicionais
+                "auto_return": "approved",  # Adicionado este parâmetro
+                "external_reference": user_uid,
+                "notification_url": f"{base_url}/mercadopago_webhook",
+                "statement_descriptor": "ORACULO PREMIUM",
+                "metadata": {
                     "user_uid": user_uid,
-                    "plan_id": "premium_monthly"
+                    "plan_id": "premium_monthly",
+                    "preference_id": preference_id
                 }
             }
 
@@ -110,7 +126,6 @@ def pagina_pagamento_upgrade():
                 # Usar st.components.v1.html para um redirecionamento mais robusto ou meta refresh
                 st.markdown(f'<meta http-equiv="refresh" content="3; url={init_point}">', unsafe_allow_html=True)
                 st.markdown(f"Se não for redirecionado automaticamente, [clique aqui para pagar]({init_point}).")
-                # st.rerun() # O meta refresh deve cuidar disso
             else:
                 st.error(f"Erro ao criar preferência de pagamento: {preference_response.get('response', {}).get('message', 'Erro desconhecido')}")
                 st.json(preference_response) # Para depuração
@@ -122,7 +137,6 @@ def pagina_pagamento_upgrade():
     if st.button("Voltar para Perfil"):
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
         st.rerun()
-
 
 # Adicione estas funções ao final do arquivo
 
