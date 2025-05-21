@@ -56,35 +56,54 @@ def get_mercadopago_credentials():
                 # Debug: Mostrar conteúdo da seção mercadopago
                 st.write("Debug - Conteúdo da seção mercadopago:")
                 mercadopago_content = st.secrets.mercadopago
+                
+                # Converter AttrDict para dicionário se necessário
+                if hasattr(mercadopago_content, 'to_dict'):
+                    mercadopago_content = mercadopago_content.to_dict()
+                
                 st.write("Tipo do conteúdo:", type(mercadopago_content))
                 st.write("Chaves disponíveis:", list(mercadopago_content.keys()) if isinstance(mercadopago_content, dict) else "Não é um dicionário")
                 
-                if isinstance(mercadopago_content, dict):
-                    # Tentar diferentes formas de acessar as credenciais
-                    access_token = (
-                        mercadopago_content.get("access_token") or
-                        mercadopago_content.get("ACCESS_TOKEN") or
-                        mercadopago_content.get("token")
-                    )
-                    public_key = (
-                        mercadopago_content.get("public_key") or
-                        mercadopago_content.get("PUBLIC_KEY") or
-                        mercadopago_content.get("key")
-                    )
+                # Tentar acessar as credenciais diretamente do objeto
+                try:
+                    access_token = getattr(mercadopago_content, 'access_token', None)
+                    if not access_token and isinstance(mercadopago_content, dict):
+                        access_token = mercadopago_content.get('access_token')
+                    
+                    public_key = getattr(mercadopago_content, 'public_key', None)
+                    if not public_key and isinstance(mercadopago_content, dict):
+                        public_key = mercadopago_content.get('public_key')
                     
                     if access_token:
                         credentials['access_token'] = access_token
                         st.write("✅ Access token encontrado")
                     else:
-                        st.write("❌ Access token não encontrado nas chaves disponíveis")
+                        st.write("❌ Access token não encontrado")
+                        st.write("Tentando acessar diretamente do st.secrets.mercadopago.access_token")
+                        try:
+                            access_token = st.secrets.mercadopago.access_token
+                            if access_token:
+                                credentials['access_token'] = access_token
+                                st.write("✅ Access token encontrado via acesso direto")
+                        except Exception as e:
+                            st.write(f"❌ Erro ao acessar access_token diretamente: {str(e)}")
                     
                     if public_key:
                         credentials['public_key'] = public_key
                         st.write("✅ Public key encontrada")
                     else:
-                        st.write("❌ Public key não encontrada nas chaves disponíveis")
-                else:
-                    st.write("❌ Conteúdo da seção mercadopago não é um dicionário")
+                        st.write("❌ Public key não encontrada")
+                        st.write("Tentando acessar diretamente do st.secrets.mercadopago.public_key")
+                        try:
+                            public_key = st.secrets.mercadopago.public_key
+                            if public_key:
+                                credentials['public_key'] = public_key
+                                st.write("✅ Public key encontrada via acesso direto")
+                        except Exception as e:
+                            st.write(f"❌ Erro ao acessar public_key diretamente: {str(e)}")
+                    
+                except Exception as e:
+                    st.write(f"❌ Erro ao acessar credenciais: {str(e)}")
             else:
                 st.write("❌ Seção 'mercadopago' não encontrada em st.secrets")
         except Exception as e:
