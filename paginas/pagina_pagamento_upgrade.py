@@ -34,8 +34,14 @@ def pagina_pagamento_upgrade():
         🔍 **Modo de Teste Ativo**
         
         Para testar o pagamento, use estas credenciais:
+        
+        **Comprador (Buyer):**
         - Email: TESTUSER973178250
         - Senha: ZmCuO5A5sm
+        
+        **Vendedor (Seller):**
+        - Email: TESTUSER1791046513
+        - Senha: XbmUmu6eEV
         
         Este é um ambiente de teste. Nenhum valor real será cobrado.
         """)
