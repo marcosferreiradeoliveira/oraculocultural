@@ -36,30 +36,19 @@ def get_mercadopago_credentials():
         st.write("Token do .env:", os.getenv("MP_ACCESS_TOKEN"))
     
     if hasattr(st, 'secrets'):
+        # Pegar diretamente da seção principal do mercadopago
         mercadopago_secrets = st.secrets.get("mercadopago", {})
-        st.write("Token do st.secrets:", mercadopago_secrets.get("access_token"))
-    
-    # 1. Tentar carregar do .env
-    if os.path.exists(".env"):
-        from dotenv import load_dotenv
-        load_dotenv()
-        credentials['access_token'] = os.getenv("MP_ACCESS_TOKEN")
-        credentials['public_key'] = os.getenv("MP_PUBLIC_KEY")
-    
-    # 2. Se não encontrou no .env, tentar do st.secrets
-    if hasattr(st, 'secrets'):
-        mercadopago_secrets = st.secrets.get("mercadopago", {})
-        if not credentials['access_token']:
+        if isinstance(mercadopago_secrets, dict):
             credentials['access_token'] = mercadopago_secrets.get("access_token")
-        if not credentials['public_key']:
             credentials['public_key'] = mercadopago_secrets.get("public_key")
+            st.write("Token do st.secrets:", credentials['access_token'])
     
     # Debug: Mostrar de onde as credenciais estão vindo
     if credentials['access_token']:
         st.write("Debug - Fonte das credenciais:")
         if os.path.exists(".env") and os.getenv("MP_ACCESS_TOKEN") == credentials['access_token']:
             st.write("Credenciais carregadas do arquivo .env")
-        elif hasattr(st, 'secrets') and st.secrets.get("mercadopago", {}).get("access_token") == credentials['access_token']:
+        elif hasattr(st, 'secrets'):
             st.write("Credenciais carregadas do st.secrets")
         
         # Mostrar o token que está sendo usado
