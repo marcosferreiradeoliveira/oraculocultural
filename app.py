@@ -1,6 +1,7 @@
 import streamlit as st
 import datetime # Para trabalhar com datas e horas
 from google.cloud.firestore_v1 import FieldFilter # Necessário para consultas where no Firestore
+import time # Importado para usar a função sleep
 
 
 # Configuração da página Streamlit (deve ser a primeira chamada Streamlit NO SCRIPT PRINCIPAL)
@@ -110,6 +111,8 @@ from paginas.cadastro import pagina_cadastro
 from paginas.pagina_perfil import pagina_perfil # Nova importação
 from paginas.pagina_cadastro_edital import pagina_cadastro_edital # Mantido
 from paginas.pagina_pagamento_upgrade import pagina_pagamento_upgrade, pagina_payment_success, pagina_payment_failure, pagina_payment_pending # Modificado
+from paginas.pagina_cadastro_projeto import pagina_cadastro_projeto
+from paginas.pagina_editar_edital import pagina_editar_edital
 
 # CSS customizado global
 st.markdown("""
@@ -135,6 +138,7 @@ st.markdown("""
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            overflow: hidden;
         }
         .project-card:hover {
             transform: translateY(-5px);
@@ -145,20 +149,29 @@ st.markdown("""
             margin-bottom: 0.75rem;
             color: #333;
             font-size: 1.1rem; 
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .project-card p {
             margin-bottom: 0.5rem;
             font-size: 0.9rem;
             color: #555;
-            flex-grow: 1; 
-            overflow: hidden; 
-            text-overflow: ellipsis; 
+        }
+        .project-description {
+            flex-grow: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
             display: -webkit-box;
-            -webkit-line-clamp: 3; 
+            -webkit-line-clamp: 3;
             -webkit-box-orient: vertical;
+            margin-bottom: 1rem;
+            max-height: 4.5em;
+            line-height: 1.5;
         }
         .project-card-actions {
-            margin-top: auto; 
+            margin-top: auto;
+            padding-top: 0.5rem;
         }
 
         @media screen and (min-width: 1024px) {
@@ -199,34 +212,71 @@ def pagina_projetos():
         return
 
     user_info = st.session_state[USER_SESSION_KEY]
-    st.title(f'Bem-vindo(a), {user_info.get("display_name", user_info.get("email", "Usuário"))}!')
     
-    # Botões de ação do usuário (Perfil e Sair)
-    cols_user_actions = st.columns(2)
-    with cols_user_actions[0]:
-        if st.button("👤 Meu Perfil", key="profile_button_projetos", use_container_width=True):
-            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
-            st.rerun()
-    with cols_user_actions[1]:
-        if st.button("🚪 Sair", key="logout_button_projetos", use_container_width=True):
-            keys_to_clear = [
-                USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PROJETO_SELECIONADO_KEY,
-                TEXTO_PROJETO_KEY, RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY,
-                OBJETIVOS_KEY, JUSTIFICATIVA_KEY, EDITAL_SELECIONADO_KEY
-            ]
-            for key in keys_to_clear:
-                if key in st.session_state:
-                    del st.session_state[key]
-            # Limpeza mais genérica de chaves de sessão relacionadas a projetos ou diagnósticos
-            project_specific_keys_patterns = [user_info.get('uid','temp_id_clear'), 'diagnostico_editavel', 'doc_gerado', 'projeto_para_excluir']
-            keys_to_remove_session = [k for k in st.session_state if any(pattern in k for pattern in project_specific_keys_patterns)]
-            for key in keys_to_remove_session:
-                if key in st.session_state:
-                    del st.session_state[key]
-
-            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
-            st.success("Você saiu da sua conta.")
-            st.rerun()
+    # Get user's full name from database
+    try:
+        db = firestore.client()
+        user_doc = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_info['uid'])).limit(1).get()
+        user_data = next(user_doc, None)
+        if user_data:
+            user_data = user_data.to_dict()
+            display_name = user_data.get('nome_completo', user_info.get('display_name', 'Usuário'))
+        else:
+            display_name = user_info.get('display_name', 'Usuário')
+    except Exception as e:
+        display_name = user_info.get('display_name', 'Usuário')
+    
+    # Top menu bar
+    st.markdown("""
+    <style>
+        .top-menu {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            margin-bottom: 1rem;
+        }
+        .top-menu-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .section-header h2 {
+            margin: 0;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Top menu with Profile and Logout
+    st.markdown('<div class="top-menu">', unsafe_allow_html=True)
+    st.markdown(f"<h3 style='margin: 0; font-size: 1.2rem;'>Bem-vindo(a), {display_name}</h3>", unsafe_allow_html=True)
+    st.markdown('<div class="top-menu-buttons">', unsafe_allow_html=True)
+    if st.button("👤 Perfil", key="profile_button_projetos"):
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
+        st.rerun()
+    if st.button("🚪 Sair", key="logout_button_projetos"):
+        keys_to_clear = [
+            USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PROJETO_SELECIONADO_KEY,
+            TEXTO_PROJETO_KEY, RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY,
+            OBJETIVOS_KEY, JUSTIFICATIVA_KEY, EDITAL_SELECIONADO_KEY
+        ]
+        for key in keys_to_clear:
+            if key in st.session_state:
+                del st.session_state[key]
+        project_specific_keys_patterns = [user_info.get('uid','temp_id_clear'), 'diagnostico_editavel', 'doc_gerado', 'projeto_para_excluir']
+        keys_to_remove_session = [k for k in st.session_state if any(pattern in k for pattern in project_specific_keys_patterns)]
+        for key in keys_to_remove_session:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+        st.success("Você saiu da sua conta.")
+        st.rerun()
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
     if 'ultimas_alteracoes' in st.session_state:
         alteracoes = st.session_state['ultimas_alteracoes']
@@ -235,23 +285,18 @@ def pagina_projetos():
             st.markdown(alteracoes.get('alteracoes', 'Nenhuma descrição de alteração.'))
         del st.session_state['ultimas_alteracoes']
 
-    projetos = get_user_projects(user_info['uid'])
-    st.header('Meus Projetos Culturais', divider='rainbow')
-    st.markdown("---") # Adiciona um divisor
-    
-    col_create1, col_create2 = st.columns(2)
-    with col_create1:
-        if st.button("🎨 Criar Novo Projeto", type="primary", use_container_width=True):
-            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'novo_projeto'
-            if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
-            if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
-            st.rerun()
-    with col_create2:
-        if st.button("📥 Cadastrar Novo Edital", type="secondary", use_container_width=True):
-            # Clear project-specific session state when navigating away from project context
-            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro_edital'
-            st.rerun()
+    # Projetos Section (First)
+    st.markdown('<div class="section-header">', unsafe_allow_html=True)
+    st.markdown("### 🎨 Meus Projetos Culturais")
+    if st.button("✨ Criar Novo Projeto", key="btn_novo_projeto"):
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'novo_projeto'
+        if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
+        if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
+    projetos = get_user_projects(user_info['uid'])
+    
     if not projetos:
         st.markdown("""
             <div style="text-align: center; padding: 3rem 1rem; background-color: #e9ecef; border-radius: 10px; margin-top: 2rem;">
@@ -270,10 +315,9 @@ def pagina_projetos():
                     <div>
                         <h3>{projeto.get('nome', 'Projeto sem nome')}</h3>
                         <p><strong>Categoria:</strong> {projeto.get('categoria', 'Não definida')}</p>
-                        <p>{projeto.get('descricao', 'Sem descrição')}</p>
+                        <p class="project-description">{projeto.get('descricao', 'Sem descrição')}</p>
                     </div>
                     <div class="project-card-actions">
-                        {''}
                     </div>
                 </div>
                 """
@@ -283,7 +327,6 @@ def pagina_projetos():
                 with btn_cols_card[0]:
                     if st.button(f"📝 Editar", key=f"editar_{projeto['id']}", use_container_width=True):
                         st.session_state[PROJETO_SELECIONADO_KEY] = projeto
-                        # Clear text/generated docs state when editing a new project
                         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
                         st.rerun()
                 with btn_cols_card[1]:
@@ -291,26 +334,56 @@ def pagina_projetos():
                         st.session_state['projeto_para_excluir'] = projeto
                         st.rerun()
 
+    # Confirmação de exclusão de projeto
     if 'projeto_para_excluir' in st.session_state:
-        projeto_excluir = st.session_state['projeto_para_excluir']
-        st.warning(f"Tem certeza que deseja excluir o projeto '{projeto_excluir.get('nome')}'? Esta ação não pode ser desfeita.")
-        col_confirm1, col_confirm2, _ = st.columns([1,1,2]) 
-        with col_confirm1:
-            if st.button("Sim, Excluir", type="primary", key=f"confirm_excluir_{projeto_excluir['id']}"):
+        projeto_para_excluir = st.session_state['projeto_para_excluir']
+        st.warning(f"⚠️ Você está prestes a excluir o projeto '{projeto_para_excluir.get('nome', 'Sem nome')}'")
+        st.write("Esta ação não pode ser desfeita.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ Confirmar Exclusão", type="primary", use_container_width=True):
                 try:
                     db = firestore.client()
-                    db.collection('projetos').document(projeto_excluir['id']).delete()
-                    st.success(f"Projeto '{projeto_excluir.get('nome')}' excluído com sucesso.")
+                    db.collection('projetos').document(projeto_para_excluir['id']).delete()
+                    st.success(f"Projeto '{projeto_para_excluir.get('nome', 'Sem nome')}' excluído com sucesso!")
                     del st.session_state['projeto_para_excluir']
+                    time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro ao excluir projeto: {e}")
-                    if 'projeto_para_excluir' in st.session_state: 
-                        del st.session_state['projeto_para_excluir']
-        with col_confirm2:
-            if st.button("Cancelar", key=f"cancel_excluir_{projeto_excluir['id']}"):
+                    st.error(f"Erro ao excluir projeto: {str(e)}")
+        
+        with col2:
+            if st.button("❌ Cancelar", use_container_width=True):
                 del st.session_state['projeto_para_excluir']
                 st.rerun()
+
+    st.markdown("---")
+    
+    # Editais Section (Second)
+    st.markdown('<div class="section-header">', unsafe_allow_html=True)
+    st.markdown("### 📋 Editais Cadastrados")
+    if st.button("📥 Cadastrar Novo Edital", key="btn_novo_edital"):
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro_edital'
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # List editais
+    try:
+        db = firestore.client()
+        editais_ref = db.collection('editais').order_by('nome')
+        editais_stream = editais_ref.stream()
+        editais_lista = [{'id': doc.id, **doc.to_dict()} for doc in editais_stream]
+        
+        if not editais_lista:
+            st.info("Nenhum edital cadastrado no momento.")
+        else:
+            for edital in editais_lista:
+                with st.expander(f"📄 {edital.get('nome', 'Edital sem nome')}"):
+                    st.write(f"**Data de Cadastro:** {edital.get('data_cadastro', 'N/A')}")
+                    st.write(f"**Descrição:** {edital.get('descricao', 'Sem descrição')}")
+    except Exception as e:
+        st.error(f"Erro ao carregar editais: {str(e)}")
 
 def pagina_novo_projeto():
     print(f"DEBUG pagina_novo_projeto: Verificando Firebase. Initialized={FIREBASE_APP_INITIALIZED}")
@@ -544,6 +617,16 @@ def main():
             pagina_perfil()
         elif final_target_page == 'cadastro_edital':
             pagina_cadastro_edital() 
+        elif final_target_page == 'cadastro_projeto':
+            pagina_cadastro_projeto()
+        elif final_target_page == 'editar_edital':
+            edital_id = st.session_state.get('edital_para_editar')
+            if edital_id:
+                pagina_editar_edital(edital_id)
+            else:
+                st.error("ID do edital não encontrado")
+                st.session_state['pagina_atual'] = 'projetos'
+                st.rerun()
         else:
             # Fallback for unknown authenticated page
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'

@@ -3,6 +3,8 @@ from constants import PAGINA_ATUAL_SESSION_KEY, USER_SESSION_KEY
 import mercadopago
 import os
 import uuid
+import firebase_admin
+from firebase_admin import firestore
 
 # Função para obter a URL base da aplicação
 def get_base_url():
@@ -158,7 +160,35 @@ def pagina_pagamento_upgrade():
 
 def pagina_payment_success():
     st.title("🎉 Pagamento Aprovado!")
-    st.success("Seu pagamento foi processado com sucesso. Seu acesso Premium será ativado em breve.")
+    
+    # Recuperar informações do usuário
+    user_info = st.session_state.get(USER_SESSION_KEY)
+    if not user_info or not user_info.get('uid'):
+        st.error("Erro: Usuário não identificado. Por favor, faça login novamente.")
+        if st.button("Ir para Login"):
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+            st.rerun()
+        return
+
+    user_uid = user_info.get('uid')
+    
+    # Atualizar status premium no Firestore
+    try:
+        db = firestore.client()
+        user_ref = db.collection('usuarios').document(user_uid)
+        
+        # Atualizar o status premium e adicionar data de ativação
+        user_ref.update({
+            'premium': True,
+            'data_ativacao_premium': firestore.SERVER_TIMESTAMP,
+            'ultima_atualizacao': firestore.SERVER_TIMESTAMP
+        })
+        
+        st.success("Seu acesso Premium foi ativado com sucesso!")
+    except Exception as e:
+        st.error(f"Erro ao ativar acesso Premium: {str(e)}")
+        return
+
     st.write("Obrigado por se juntar ao Oráculo Cultural Premium!")
     
     preference_id = st.query_params.get("pref_id", [None])[0]
@@ -171,11 +201,6 @@ def pagina_payment_success():
         st.write(f"ID do Pagamento no Mercado Pago: {mp_payment_id}")
     if mp_status:
         st.write(f"Status no Mercado Pago: {mp_status}")
-
-    st.info("Importante: A ativação do plano pode levar alguns minutos enquanto processamos a confirmação final.")
-    # Aqui, idealmente, você aguardaria a confirmação via webhook.
-    # Para uma experiência de usuário imediata, você poderia verificar o status do pagamento
-    # usando o mp_payment_id, mas o webhook é mais confiável.
 
     if st.button("Ir para Meus Projetos"):
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
