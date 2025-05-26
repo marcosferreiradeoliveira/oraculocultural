@@ -1,7 +1,19 @@
 import streamlit as st
 from firebase_admin import firestore
 from google.cloud.firestore_v1 import FieldFilter
-from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY
+from constants import (
+    USER_SESSION_KEY, 
+    AUTENTICADO_SESSION_KEY, 
+    PAGINA_ATUAL_SESSION_KEY,
+    PROJETO_SELECIONADO_KEY,
+    TEXTO_PROJETO_KEY,
+    RESUMO_KEY,
+    ORCAMENTO_KEY,
+    CRONOGRAMA_KEY,
+    OBJETIVOS_KEY,
+    JUSTIFICATIVA_KEY,
+    EDITAL_SELECIONADO_KEY
+)
 from datetime import datetime, timedelta
 
 
