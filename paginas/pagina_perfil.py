@@ -251,7 +251,7 @@ def pagina_perfil():
                     - **Diagnóstico IA** mais completo para seus projetos.
                     - **Geração de documentos** em múltiplos formatos.
                     - **Suporte prioritário** e personalizado.
-                    - **Valor:** R$ 1,00 / mês
+                    - **Valor:** R$ 99,00 / mês
                     """
                 )
                 if st.button("💎 Fazer Upgrade para Premium", key="upgrade_premium_button", type="primary", use_container_width=True):
