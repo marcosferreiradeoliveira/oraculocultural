@@ -123,7 +123,7 @@ st.markdown("""
         
         /* Estilos gerais */
         .stApp {
-            background-color: #f8f9fa;
+            background-color: #F7F5F2;
         }
         
         /* Container principal */
@@ -160,6 +160,12 @@ st.markdown("""
             border-color: #cbd5e1;
         }
         
+        .project-card-content {
+            flex-grow: 1;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+        
         .project-card h3 {
             color: #1e293b;
             font-size: 1.2rem;
@@ -181,10 +187,10 @@ st.markdown("""
             overflow: hidden;
             text-overflow: ellipsis;
             display: -webkit-box;
-            -webkit-line-clamp: 3;
+            -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             margin-bottom: 1rem;
-            max-height: 4.5em;
+            max-height: 3em;
             line-height: 1.5;
             color: #64748b;
         }
@@ -204,6 +210,32 @@ st.markdown("""
         
         .stButton button:hover {
             transform: translateY(-1px);
+        }
+        
+        /* Specific styles for primary action buttons (pink) */
+        .stButton button[kind="primary"] {
+            background-color: #C02679 !important;
+            color: white !important;
+            border-color: #C02679 !important;
+        }
+
+        .stButton button[kind="primary"]:hover {
+            background-color: #a01f61 !important;
+            border-color: #a01f61 !important;
+            color: white !important;
+        }
+
+        /* Specific styles for secondary action buttons (outlined) */
+         .stButton button[kind="secondary"] {
+            background-color: white !important;
+            color: #C02679 !important;
+            border: 1px solid #C02679 !important;
+        }
+
+        .stButton button[kind="secondary"]:hover {
+            background-color: #f7f5f2 !important;
+            color: #a01f61 !important;
+            border-color: #a01f61 !important;
         }
         
         /* Containers de login e formulários */
@@ -315,7 +347,7 @@ st.markdown("""
             transition: color 0.2s ease;
         }
         .top-menu-button:hover {
-            color: #3b82f6;
+            color: #C02679;
             text-decoration: underline;
         }
         .section-header {
@@ -326,6 +358,9 @@ st.markdown("""
         }
         .section-header h2 {
             margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
         .home-box {
             background-color: white;
@@ -449,7 +484,7 @@ def pagina_projetos():
             transition: color 0.2s ease;
         }
         .top-menu-button:hover {
-            color: #3b82f6;
+            color: #C02679;
             text-decoration: underline;
         }
     </style>
@@ -459,7 +494,7 @@ def pagina_projetos():
     st.markdown('<div class="top-menu">', unsafe_allow_html=True)
     
     # Create a single line with welcome message and buttons
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2, col3 = st.columns([3, 0.5, 0.5])
     
     with col1:
         st.markdown(f"<h3 style='margin: 0; font-size: 1.2rem;'>Bem-vindo(a), {display_name}</h3>", unsafe_allow_html=True)
@@ -541,25 +576,9 @@ def pagina_projetos():
 
     st.markdown("---")
     
-    # Editais Section
-    st.markdown('<div class="section-header">', unsafe_allow_html=True)
-    st.markdown("### 📋 Editais Cadastrados")
-    if st.button("📥 Cadastrar Novo Edital", key="btn_novo_edital"):
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro_edital'
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    if 'ultimas_alteracoes' in st.session_state:
-        alteracoes = st.session_state['ultimas_alteracoes']
-        st.success(f"✅ Alterações aplicadas no projeto: {alteracoes.get('nome_projeto', 'N/A')}")
-        with st.expander("📝 Ver detalhes das alterações"):
-            st.markdown(alteracoes.get('alteracoes', 'Nenhuma descrição de alteração.'))
-        del st.session_state['ultimas_alteracoes']
-
     # Projetos Section (First)
-    st.markdown('<div class="section-header">', unsafe_allow_html=True)
-    st.markdown("### 🎨 Meus Projetos Culturais")
-    if st.button("✨ Criar Novo Projeto", key="btn_novo_projeto"):
+    st.markdown('<div class="section-header"><h2>🎨 Meus Projetos Culturais</h2>', unsafe_allow_html=True)
+    if st.button("✨ Criar Novo Projeto", key="btn_novo_projeto", type="primary"):
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'novo_projeto'
         if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
         if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
@@ -583,9 +602,9 @@ def pagina_projetos():
             with cols[col_index]:
                 card_html = f""" 
                 <div class="project-card">
-                    <div>
-                        <h3>{projeto.get('nome', 'Projeto sem nome')}</h3>
-                        <p><strong>Categoria:</strong> {projeto.get('categoria', 'Não definida')}</p>
+                    <div class="project-card-content">
+                        <h3>{'📄' if projeto.get('edital_associado') else '🎵' if projeto.get('categoria') == 'Música' else '🖼️' if projeto.get('categoria') == 'Artes Visuais' else '🎭' if projeto.get('categoria') == 'Teatro' else '💃' if projeto.get('categoria') == 'Dança' else '🎬' if projeto.get('categoria') == 'Cinema e Audiovisual' else '📚' if projeto.get('categoria') == 'Literatura e Publicações' else '🏛️' if projeto.get('categoria') == 'Patrimônio Cultural' else '🧶' if projeto.get('categoria') == 'Artesanato' else '🥁' if projeto.get('categoria') == 'Cultura Popular' else '✨'} {projeto.get('nome', 'Projeto sem nome')}</h3>
+                        <p style="color: #C02679; font-size: 0.9rem; margin: 0.2rem 0;">Categoria: {projeto.get('categoria', 'Não definida')}</p>
                         <p class="project-description">{projeto.get('descricao', 'Sem descrição')}</p>
                     </div>
                     <div class="project-card-actions">
@@ -596,12 +615,12 @@ def pagina_projetos():
                 
                 btn_cols_card = st.columns(2)
                 with btn_cols_card[0]:
-                    if st.button(f"📝 Editar", key=f"editar_{projeto['id']}", use_container_width=True):
+                    if st.button(f"📝 Editar", key=f"editar_{projeto['id']}", type="secondary", use_container_width=True):
                         st.session_state[PROJETO_SELECIONADO_KEY] = projeto
                         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
                         st.rerun()
                 with btn_cols_card[1]:
-                    if st.button(f"🗑️ Excluir", key=f"excluir_{projeto['id']}", use_container_width=True):
+                    if st.button(f"🗑️ Excluir", key=f"excluir_{projeto['id']}", type="secondary", use_container_width=True):
                         st.session_state['projeto_para_excluir'] = projeto
                         st.rerun()
 
@@ -631,6 +650,13 @@ def pagina_projetos():
 
     st.markdown("---")
     
+    # Editais Section (Moved below projects)
+    st.markdown('<div class="section-header"><h2>📄 Editais Cadastrados</h2>', unsafe_allow_html=True)
+    if st.button("📥 Cadastrar Novo Edital", key="btn_novo_edital", type="primary"):
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro_edital'
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
     # List editais
     try:
         db = firestore.client()
@@ -641,12 +667,65 @@ def pagina_projetos():
         if not editais_lista:
             st.info("Nenhum edital cadastrado no momento.")
         else:
-            for edital in editais_lista:
-                with st.expander(f"📄 {edital.get('nome', 'Edital sem nome')}"):
-                    st.write(f"**Data de Cadastro:** {edital.get('data_cadastro', 'N/A')}")
-                    st.write(f"**Descrição:** {edital.get('descricao', 'Sem descrição')}")
+            num_cols_editais = 3 # Number of columns for editais, same as projects
+            cols_editais = st.columns(num_cols_editais)
+            for i, edital in enumerate(editais_lista):
+                col_index_editais = i % num_cols_editais
+                with cols_editais[col_index_editais]:
+                    # Card structure for each edital
+                    card_html_edital = f""" 
+                    <div class="project-card"> <!-- Using project-card class for similar styling -->
+                        <div class="project-card-content">
+                            <h3>📄 {edital.get('nome', 'Edital sem nome')}</h3>
+                            <p style="color: #64748b; font-size: 0.95rem; margin-bottom: 0.75rem; line-height: 1.5;">{edital.get('descricao', 'Sem descrição')}</p>
+                            <p style="font-size: 0.9rem; color: #334155; margin: 0;"><strong>Data de Inscrição:</strong> {edital.get('data_inscricao', 'Não definida')}</p>
+                            <p style="font-size: 0.9rem; color: #334155; margin: 0.2rem 0;"><strong>Categorias de Projetos:</strong> {', '.join(edital.get('categorias_projetos', [])) if edital.get('categorias_projetos') else 'Não definidas'}</p>
+                            <p style="font-size: 0.9rem; color: #334155; margin: 0.2rem 0;"><strong>Textos Requeridos:</strong> {', '.join(edital.get('textos_requeridos', [])) if edital.get('textos_requeridos') else 'Não definidos'}</p>
+                            <p style="font-size: 0.9rem; color: #334155; margin: 0.2rem 0;"><strong>Documentos Requeridos:</strong> {', '.join(edital.get('documentos_requeridos', [])) if edital.get('documentos_requeridos') else 'Não definidos'}</p>
+                        </div>
+                        <div class="project-card-actions">
+                        </div>
+                    </div>
+                    """
+                    st.markdown(card_html_edital, unsafe_allow_html=True)
+                    
+                    btn_cols_card_edital = st.columns(2)
+                    with btn_cols_card_edital[0]:
+                        if st.button(f"📝 Editar", key=f"editar_edital_{edital['id']}", type="secondary", use_container_width=True):
+                            st.session_state['edital_para_editar'] = edital['id']
+                            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_edital'
+                            st.rerun()
+                    with btn_cols_card_edital[1]:
+                        if st.button(f"🗑️ Excluir", key=f"excluir_edital_{edital['id']}", type="secondary", use_container_width=True):
+                            st.session_state['edital_para_excluir'] = edital
+                            st.rerun()
+
     except Exception as e:
         st.error(f"Erro ao carregar editais: {str(e)}")
+
+    # Confirmação de exclusão de edital (Add this block)
+    if 'edital_para_excluir' in st.session_state:
+        edital_para_excluir = st.session_state['edital_para_excluir']
+        st.warning(f"⚠️ Você está prestes a excluir o edital '{edital_para_excluir.get('nome', 'Sem nome')}'")
+        st.write("Esta ação não pode ser desfeita.")
+        
+        col1_edital_del, col2_edital_del = st.columns(2)
+        with col1_edital_del:
+            if st.button("✅ Confirmar Exclusão", key="confirmar_exclusao_edital", type="primary", use_container_width=True):
+                try:
+                    db = firestore.client()
+                    db.collection('editais').document(edital_para_excluir['id']).delete()
+                    st.success(f"Edital '{edital_para_excluir.get('nome', 'Sem nome')}' excluído com sucesso!")
+                    del st.session_state['edital_para_excluir']
+                    time.sleep(1)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao excluir edital: {str(e)}")
+        
+        with col2_edital_del:
+            if st.button("❌ Cancelar", key="cancelar_exclusao_edital", use_container_width=True):
+                del st.session_state['edital_para_excluir']
+                st.rerun()
 
 def pagina_novo_projeto():
     print(f"DEBUG pagina_novo_projeto: Verificando Firebase. Initialized={FIREBASE_APP_INITIALIZED}")
