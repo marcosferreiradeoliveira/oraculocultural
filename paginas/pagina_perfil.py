@@ -77,6 +77,48 @@ def pagina_perfil():
                 if forced_view and not is_premium_user:
                     st.info("Seu período de teste de 24 horas expirou. Para continuar acessando seus projetos e outras funcionalidades, por favor, escolha um plano.")
 
+                # Seção de Upgrade de Plano (só exibe se o usuário não for premium)
+                if not is_premium_user:
+                    st.subheader("🚀 Faça um Upgrade no seu Plano!")
+                    st.markdown("Desbloqueie todo o potencial da nossa plataforma.")
+
+                    col_trial, col_premium_upgrade = st.columns(2)
+
+                    with col_trial:
+                        with st.container(border=True):
+                            st.markdown("### ⏳ Teste Premium por 1 Dia")
+                            st.markdown(
+                                """
+                                Experimente todos os recursos exclusivos do plano Premium gratuitamente por 24 horas!
+                                Ideal para você conhecer na prática como podemos te ajudar a alcançar seus objetivos.
+                                """
+                            )
+                            if not forced_view and st.button("✨ Iniciar Teste Gratuito (1 Dia)", key="start_trial_button", use_container_width=True):
+                                st.success("Funcionalidade de teste de 1 dia ainda em desenvolvimento!")
+                                # Lógica para ativar o trial no backend (ex: atualizar Firestore)
+
+                    with col_premium_upgrade:
+                        with st.container(border=True):
+                            st.markdown("### ⭐ Seja Premium")
+                            st.markdown(
+                                """
+                                Tenha acesso ilimitado e vantagens exclusivas:
+                                - Criação **ilimitada** de projetos.
+                                - Acesso a **modelos de editais avançados**.
+                                - Ferramentas de **análise de viabilidade** detalhadas.
+                                - **Diagnóstico IA** mais completo para seus projetos.
+                                - **Geração de documentos** em múltiplos formatos.
+                                - **Suporte prioritário** e personalizado.
+                                - **Valor:** R$ 99,00 / mês
+                                """
+                            )
+                            if st.button("💎 Fazer Upgrade para Premium", key="upgrade_premium_button", type="primary", use_container_width=True):
+                                st.info("Redirecionando para a página de upgrade...")
+                                # Lógica para redirecionar para pagamento/upgrade
+                                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'pagamento_upgrade'
+                                st.rerun()
+                    st.divider() # Divider após a seção de upgrade
+
                 # Seção de Biografia Profissional
                 st.divider()
                 st.subheader("📝 Biografia Profissional")
@@ -217,52 +259,6 @@ def pagina_perfil():
         st.write("**Status da Conta:** Erro ao verificar.")
 
     st.divider()
-
-    # Seção de Upgrade de Plano (só exibe se o usuário não for premium)
-    if not is_premium_user:
-        
-        st.subheader("🚀 Faça um Upgrade no seu Plano!")
-        st.markdown("Desbloqueie todo o potencial da nossa plataforma.")
-
-        col_trial, col_premium_upgrade = st.columns(2)
-
-        with col_trial:
-            with st.container(border=True):
-                st.markdown("### ⏳ Teste Premium por 1 Dia")
-                st.markdown(
-                    """
-                    Experimente todos os recursos exclusivos do plano Premium gratuitamente por 24 horas!
-                    Ideal para você conhecer na prática como podemos te ajudar a alcançar seus objetivos.
-                    """
-                )
-                if not forced_view and st.button("✨ Iniciar Teste Gratuito (1 Dia)", key="start_trial_button", use_container_width=True):
-                    st.success("Funcionalidade de teste de 1 dia ainda em desenvolvimento!")
-                    # Lógica para ativar o trial no backend (ex: atualizar Firestore)
-
-        with col_premium_upgrade:
-            with st.container(border=True):
-                st.markdown("### ⭐ Seja Premium")
-                st.markdown(
-                    """
-                    Tenha acesso ilimitado e vantagens exclusivas:
-                    - Criação **ilimitada** de projetos.
-                    - Acesso a **modelos de editais avançados**.
-                    - Ferramentas de **análise de viabilidade** detalhadas.
-                    - **Diagnóstico IA** mais completo para seus projetos.
-                    - **Geração de documentos** em múltiplos formatos.
-                    - **Suporte prioritário** e personalizado.
-                    - **Valor:** R$ 99,00 / mês
-                    """
-                )
-                if st.button("💎 Fazer Upgrade para Premium", key="upgrade_premium_button", type="primary", use_container_width=True):
-                    st.info("Redirecionando para a página de upgrade...")
-                    # Lógica para redirecionar para pagamento/upgrade
-                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'pagamento_upgrade'
-                    st.rerun()
-        st.divider() # Divider após a seção de upgrade
-    else:
-        st.success("🎉 Você já é um usuário Premium! Aproveite todos os benefícios.")
-        st.divider() # Divider se já for premium
 
     # Lógica para o botão "Voltar para Projetos" no rodapé
     if not forced_view:
