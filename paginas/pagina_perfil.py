@@ -73,6 +73,10 @@ def pagina_perfil():
                 st.write(f"**Email:** {email_para_exibir}")
                 st.write(f"**Status da Conta:** {status_conta_texto}")
 
+                # Exibir mensagem de trial expirado ANTES da seção de biografia, se aplicável
+                if forced_view and not is_premium_user:
+                    st.info("Seu período de teste de 24 horas expirou. Para continuar acessando seus projetos e outras funcionalidades, por favor, escolha um plano.")
+
                 # Seção de Biografia Profissional
                 st.divider()
                 st.subheader("📝 Biografia Profissional")
@@ -213,10 +217,6 @@ def pagina_perfil():
         st.write("**Status da Conta:** Erro ao verificar.")
 
     st.divider()
-
-    # Exibir mensagem de trial expirado ANTES da seção de upgrade, se aplicável
-    if forced_view and not is_premium_user:
-        st.info("Seu período de teste de 24 horas expirou. Para continuar acessando seus projetos e outras funcionalidades, por favor, escolha um plano.")
 
     # Seção de Upgrade de Plano (só exibe se o usuário não for premium)
     if not is_premium_user:
