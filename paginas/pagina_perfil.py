@@ -38,31 +38,37 @@ def pagina_perfil():
     # Definir forced_view no início da função
     forced_view = st.session_state.get('forced_profile_view', False)
 
-    st.title("Meu Perfil")
+    # Use columns to align title and buttons
+    col_title, col_back, col_logout = st.columns([4, 1, 1]) # Adjust column ratios as needed
+
+    with col_title:
+        st.markdown("## Meu Perfil") # Use markdown for title consistent with section headers
+
+    # Botão Voltar para Projetos no topo (condicional)
+    if not forced_view:
+        with col_back:
+            if st.button("⬅️ Voltar", key="perfil_voltar_projetos_top", use_container_width=True):
+                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
+                st.rerun()
 
     # Botão de logout no topo
-    if st.button("🚪 Sair", key="logout_top"):
-        keys_to_clear = [
-            USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PROJETO_SELECIONADO_KEY,
-            TEXTO_PROJETO_KEY, RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY,
-            OBJETIVOS_KEY, JUSTIFICATIVA_KEY, EDITAL_SELECIONADO_KEY
-        ]
-        for key in keys_to_clear:
-            if key in st.session_state:
-                del st.session_state[key]
-        project_specific_keys_patterns = [user_info.get('uid','temp_id_clear'), 'diagnostico_editavel', 'doc_gerado', 'projeto_para_excluir']
-        keys_to_remove_session = [k for k in st.session_state if any(pattern in k for pattern in project_specific_keys_patterns)]
-        for key in keys_to_remove_session:
-            if key in st.session_state:
-                del st.session_state[key]
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
-        st.success("Você saiu da sua conta.")
-        st.rerun()
-
-    # Botão Voltar para Projetos no topo
-    if not forced_view:
-        if st.button("⬅️ Voltar para Projetos", key="perfil_voltar_projetos_top"):
-            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
+    with col_logout:
+        if st.button("🚪 Sair", key="logout_top", use_container_width=True):
+            keys_to_clear = [
+                USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PROJETO_SELECIONADO_KEY,
+                TEXTO_PROJETO_KEY, RESUMO_KEY, ORCAMENTO_KEY, CRONOGRAMA_KEY,
+                OBJETIVOS_KEY, JUSTIFICATIVA_KEY, EDITAL_SELECIONADO_KEY
+            ]
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
+            project_specific_keys_patterns = [user_info.get('uid','temp_id_clear'), 'diagnostico_editavel', 'doc_gerado', 'projeto_para_excluir']
+            keys_to_remove_session = [k for k in st.session_state if any(pattern in k for pattern in project_specific_keys_patterns)]
+            for key in keys_to_remove_session:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+            st.success("Você saiu da sua conta.")
             st.rerun()
 
     nome_para_exibir = user_info.get("nome", user_info.get("display_name", "Nome não disponível"))
