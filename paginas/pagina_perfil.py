@@ -181,7 +181,7 @@ def pagina_perfil():
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    nome_completo = st.text_input("Nome Completo", value=usuario_doc_data.get('nome_completo', ''))
+                    nome_completo = st.text_input("Nome Completo", value=usuario_doc_data.get('nome', nome_para_exibir))
                     rg = st.text_input("RG", value=usuario_doc_data.get('rg', ''))
                     orgao_emissor = st.text_input("Órgão Emissor", value=usuario_doc_data.get('orgao_emissor', ''))
                     
