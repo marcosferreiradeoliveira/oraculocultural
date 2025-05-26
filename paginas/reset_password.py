@@ -1,11 +1,8 @@
 import streamlit as st
 import firebase_admin
 from firebase_admin import auth
-from constants import PAGINA_ATUAL_SESSION_KEY # Corrigida a importação
+from constants import PAGINA_ATUAL_SESSION_KEY
 import time
-import os # Importar os para acessar variáveis de ambiente/secrets
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail # Importar Mail para construir o email
 
 def pagina_reset_password():
     """Página para recuperação de senha"""
@@ -56,40 +53,12 @@ def pagina_reset_password():
         if submitted:
             if email:
                 try:
-                    # Gera o link de recuperação de senha
-                    reset_link = auth.generate_password_reset_link(email)
-                    
-                    # --- Enviar email usando SendGrid ---
-                    # Substitua 'YOUR_SENDGRID_API_KEY' pela sua chave da API SendGrid
-                    # É altamente recomendável usar Streamlit Secrets ou variáveis de ambiente para isso
-                    # Ex: sendgrid_api_key = st.secrets['SENDGRID_API_KEY']
-                    # Ou: sendgrid_api_key = os.environ.get('SENDGRID_API_KEY')
-                    sendgrid_api_key = "YOUR_SENDGRID_API_KEY" # <- Substitua ou use secrets/env vars
-                    sender_email = "seu_email_remetente@exemplo.com" # <- Substitua pelo seu email remetente
-                    subject = "Recuperação de Senha" # <- Personalize o assunto
-                    # Corpo do email em HTML ou texto plano. Inclua o reset_link.
-                    html_content = f"""
-                    <p>Olá,</p>
-                    <p>Clique no link abaixo para redefinir sua senha:</p>
-                    <p><a href=\"{reset_link}\">Redefinir Senha</a></p>
-                    <p>Se você não solicitou uma redefinição de senha, ignore este email.</p>
-                    """
-                    
-                    message = Mail(
-                        from_email=sender_email,
-                        to_emails=email,
-                        subject=subject,
-                        html_content=html_content)
-                    
-                    try:
-                        sg = SendGridAPIClient(sendgrid_api_key)
-                        response = sg.send(message)
-                        # Opcional: verificar response.status_code para confirmar sucesso (200 ou 202)
-                        st.toast("Email de recuperação enviado! Verifique sua caixa de entrada e spam.", icon="✅")
-                        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login' # Redireciona para o login
-                        st.rerun() 
-                    except Exception as e:
-                        st.error(f"Erro ao enviar email com SendGrid: {str(e)}")
+                    # Gera e envia o link de recuperação de senha usando Firebase Auth
+                    auth.generate_password_reset_link(email)
+                    st.success("Email de recuperação enviado! Verifique sua caixa de entrada e spam.")
+                    time.sleep(2)
+                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+                    st.rerun()
                 except firebase_admin.auth.UserNotFoundError:
                     st.error("Nenhum usuário encontrado com este endereço de e-mail.")
                 except Exception as e:
@@ -97,7 +66,7 @@ def pagina_reset_password():
             else:
                 st.error("Por favor, digite um email válido.")
     
-    # Botão para voltar ao login (se o formulário ainda estiver visível)
+    # Botão para voltar ao login
     if st.button("⬅️ Voltar para Login", key="back_to_login_initial_reset_page"):
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
         st.rerun()
