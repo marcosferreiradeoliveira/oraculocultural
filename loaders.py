@@ -44,7 +44,8 @@ def carrega_pdf(caminho):
         try:
             loader = PyPDFLoader(caminho)
             lista_documentos = loader.load()
-            documento = '\n\n'.join([doc.page_content for doc in lista_documentos])
+            # Mantém parágrafos separados por duas quebras de linha
+            documento = '\n\n'.join([doc.page_content.replace('\n', ' ').strip() for doc in lista_documentos])
             if documento and len(documento.strip()) > 10:
                 return documento
         except Exception as e:
@@ -57,7 +58,8 @@ def carrega_pdf(caminho):
             reader = pypdf.PdfReader(caminho)
             texto = ""
             for page in reader.pages:
-                texto += page.extract_text() + "\n\n"
+                # Mantém parágrafos separados por duas quebras de linha
+                texto += page.extract_text().replace('\n', ' ').strip() + "\n\n"
             if texto and len(texto.strip()) > 10:
                 return texto.strip()
         except Exception as e:
@@ -70,7 +72,8 @@ def carrega_pdf(caminho):
             with pdfplumber.open(caminho) as pdf:
                 texto = ""
                 for page in pdf.pages:
-                    texto += page.extract_text() + "\n\n"
+                    # Mantém parágrafos separados por duas quebras de linha
+                    texto += page.extract_text().replace('\n', ' ').strip() + "\n\n"
                 if texto and len(texto.strip()) > 10:
                     return texto.strip()
         except Exception as e:

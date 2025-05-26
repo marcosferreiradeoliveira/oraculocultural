@@ -4,12 +4,7 @@ from firebase_admin import credentials, auth
 import os
 import time
 from services.firebase_init import initialize_firebase, get_error_message
-
-# Constantes para nomes de chave do session_state
-USER_SESSION_KEY = 'user'
-AUTENTICADO_SESSION_KEY = 'autenticado'
-PAGINA_ATUAL_SESSION_KEY = 'pagina_atual'
-FIREBASE_INITIALIZED_KEY = 'firebase_initialized'
+from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY # Importado de constants
 
 @st.cache_resource
 def initialize_firebase_app():
@@ -59,32 +54,69 @@ def pagina_login():
     # --- CSS Styles (mantido igual) ---
     st.markdown("""
     <style>
+        html, body {
+            padding: 0 !important;
+            margin: 0 !important;
+            height: 100% !important; /* Garante que o corpo ocupe 100% para referência de vh */
+            overflow: hidden !important; /* Evita barras de rolagem na página de login */
+            background: linear-gradient(120deg, #e9d5ff, #f3e8ff, #faf5ff) !important; /* Gradiente rosa claro para todo o fundo */
+        }
+
         .stApp > header { display: none !important; }
-        section.main.main { padding-top: 0 !important; margin-top: 0 !important; }
+        section.main.main { 
+            padding-top: 0 !important; margin-top: 0 !important; 
+            background-color: transparent !important; /* Para o gradiente do body aparecer */
+        }
+        /* Este é o contêiner principal que agora segura as colunas do login */
         .stApp section.main.main > div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="block-container"]:first-child {
-            padding-top: 0px !important;
+            padding: 0 !important; margin: 0 !important;
+            height: 100vh !important; /* Ocupa toda a altura da viewport */
+            background: linear-gradient(120deg, #e9d5ff, #f3e8ff, #faf5ff) !important; /* Gradiente rosa claro */
+            display: flex !important; /* Para que as colunas (seus filhos) se alinhem corretamente */
+            flex-direction: row !important; /* As colunas são dispostas em linha */
         }
         div[data-testid="stSidebarNav"], div[data-testid="collapsedControl"] { display: none; }
         div[data-testid="element-container"] pre, .stCodeBlock,
         [data-testid="stMarkdownContainer"] code, [data-testid="stMarkdownContainer"] pre {
             display: none !important;
         }
+        /* Additional rules to remove top spacing */
+        .block-container { 
+            padding-top: 0rem !important; 
+            margin-top: 0rem !important; 
+        }
+        div[data-testid="stMainBlockContainer"] {
+            padding-top: 0rem !important;
+            margin-top: 0rem !important;
+            background-color: transparent !important; /* Para o gradiente do body aparecer */
+        }
+        section[data-testid="stMain"] {
+            padding-top: 0rem !important;
+            margin-top: 0rem !important;
+            background-color: transparent !important; /* Para o gradiente do body aparecer */
+        }
+        /* Targeting the stMarkdownContainer class */
+        .st-emotion-cache-1rsyhoq {
+            padding-top: 0rem !important;
+            margin-top: 0rem !important;
+        }
+
+        /* Esta regra é menos relevante agora que 'login-master-container' foi removido. 
+           O fundo é tratado por 'html, body' e pelo seletor de container de colunas acima.
+           Removendo 'background' e 'align-items' para evitar conflitos. */
         div.block-container:has(div.login-master-container) {
             padding: 0 !important; 
             margin: 0 !important; 
             max-width: 100% !important;
             display: flex; 
             justify-content: center; 
-            align-items: center; 
-            min-height: 100vh;
-            background: linear-gradient(120deg, #e9d5ff, #f3e8ff, #faf5ff);
+            /* align-items: flex-start; */ /* Removido, pois o container das colunas controla o alinhamento dos filhos */
+            height: 100vh;
+            /* background: linear-gradient(120deg, #e9d5ff, #f3e8ff, #faf5ff); */ /* Removido */
         }
-        .login-master-container {
-            width: 100%; max-width: 100%; height: 100vh;
-            display: flex; flex-direction: row; overflow: hidden;
-        }
+        /* .login-master-container (div removido) */
         .login-left-panel {
-            background: linear-gradient(135deg, #e9d5ff, #ddd6fe);
+            background: linear-gradient(120deg, #e9d5ff, #f3e8ff, #faf5ff) !important; /* Gradiente rosa claro para o painel esquerdo */
             display: flex; flex-direction: column; justify-content: center;
             padding: 2rem 3rem; color: #1e293b; height: 100%;
         }
@@ -99,10 +131,11 @@ def pagina_login():
         .stat-number { font-size: 2rem; font-weight: 700; color: #7e22ce; margin-bottom: 0.5rem; }
         .stat-label { font-size: 0.9rem; color: #64748b; }
         .login-right-panel {
-            background-color: white; display: flex; flex-direction: column;
+            background-color: white !important; /* Fundo branco para o painel direito */
+            display: flex; flex-direction: column;
             justify-content: center; align-items: center; padding: 2rem;
-            box-shadow: -10px 0 15px -3px rgba(0,0,0,0.1);
-            height: 100%; border-radius: 2rem 0 0 2rem;
+            box-shadow: -10px 0 15px -3px rgba(0,0,0,0.1) !important; /* Restaurar sombra */
+            height: 100%; border-radius: 2rem 0 0 2rem !important; /* Restaurar bordas arredondadas */
         }
         .login-right-panel .logo { margin-bottom: 2rem; width: 80px; height: 80px; }
         .login-right-panel h2 { font-size: 2rem; font-weight: 700; color: #1e293b; margin-bottom: 0.5rem; text-align: center; }
@@ -129,6 +162,27 @@ def pagina_login():
         .signup-link a { color: #7e22ce; text-decoration: none; font-weight: 500; }
         .signup-link a:hover { text-decoration: underline; }
         
+        /* Estilo para o botão de cadastro parecer texto/link */
+        div.signup-link div[data-testid="stButton"] button {
+            background-color: transparent !important;
+            color: #475569 !important; /* Cor de texto padrão para se assemelhar a texto normal */
+            border: none !important;
+            padding: 0 !important; /* Remove padding de botão */
+            font-size: 0.875rem !important; /* Mesmo tamanho do texto ao redor */
+            font-weight: normal !important; /* Peso de fonte de texto normal */
+            text-decoration: none !important; /* Sem sublinhado por padrão */
+            width: auto !important; /* Para não ocupar a largura toda */
+            display: inline !important; /* Para fluir com o texto */
+            box-shadow: none !important; /* Remove qualquer sombra de botão */
+            line-height: inherit !important; /* Para alinhar verticalmente com texto adjacente */
+        }
+
+        div.signup-link div[data-testid="stButton"] button:hover {
+            color: #7e22ce !important; /* Cor roxa no hover, como um link */
+            text-decoration: underline !important; /* Sublinhado no hover */
+            background-color: transparent !important; /* Garante que não haja mudança de fundo no hover */
+        }
+        
         @media (max-width: 992px) {
             .login-master-container { flex-direction: column; height: auto; }
             .login-left-panel { padding: 2rem; }
@@ -140,7 +194,7 @@ def pagina_login():
     """, unsafe_allow_html=True)
 
     # --- Layout Principal (mantido igual) ---
-    st.markdown('<div class="login-master-container">', unsafe_allow_html=True)
+    # st.markdown('<div class="login-master-container">', unsafe_allow_html=True)
     
     col_esquerda, col_direita = st.columns([0.55, 0.45])
 

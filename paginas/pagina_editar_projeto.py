@@ -22,6 +22,7 @@ from analise import (
 )
 import re
 import os
+import random
 
 llm = get_llm() # LLM global instanciada
 
@@ -31,8 +32,26 @@ def slugify(text):
     text = re.sub(r'[^\w_]', '', text) # Remove non-alphanumeric (except underscore)
     return text.lower()
 
+def retry_with_backoff(func, max_retries=3, initial_delay=1):
+    """Função para tentar novamente com backoff exponencial"""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            if "insufficient_quota" not in str(e).lower() or attempt == max_retries - 1:
+                raise e
+            
+            delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
+            st.warning(f"⚠️ Tentativa {attempt + 1} falhou. Aguardando {delay:.1f} segundos antes de tentar novamente...")
+            time.sleep(delay)
+            st.rerun()
+
 def pagina_editar_projeto():
     """Página de edição com menu lateral de 3 seções"""
+    
+    # Initialize secao_atual if not present
+    if 'secao_atual' not in st.session_state:
+        st.session_state['secao_atual'] = "📥 Carregar Projeto"
     
     st.markdown("""
     <style>
@@ -54,7 +73,6 @@ def pagina_editar_projeto():
                 st.sidebar.error(get_error_message())
                 return
         db = firestore.client()
-        st.sidebar.success("Conexão com Firebase estabelecida!")
     except Exception as e:
         st.sidebar.error(f"Erro ao conectar com o banco de dados: {str(e)}")
         return
@@ -71,40 +89,42 @@ def pagina_editar_projeto():
     
     projeto_id = projeto.get('id', 'default_id') # Garante que temos um ID
 
-    with st.sidebar:
-        st.title("📂 Menu de Edição")
-        if 'secao_atual' not in st.session_state:
-            st.session_state['secao_atual'] = "📥 Carregar Projeto"
-            
-        secao_selecionada = st.radio(
-            "Selecione a seção:",
-            ["📥 Carregar Projeto", "🔍 Fazer Diagnóstico", "📄 Gerar Documentos"],
-            index=["📥 Carregar Projeto", "🔍 Fazer Diagnóstico", "📄 Gerar Documentos"].index(st.session_state['secao_atual']),
-            key=f'secao_radio_{projeto_id}' 
-        )
-        
-        if secao_selecionada != st.session_state['secao_atual']:
-            st.session_state['secao_atual'] = secao_selecionada
-            st.rerun()
-        
-        st.divider()
-        if st.button("⬅️ Voltar para Projetos"):
-            st.session_state['pagina_atual'] = 'projetos'
-            # Limpar estados específicos da página de edição ao sair
-            keys_to_clear = [k for k in st.session_state.keys() if projeto_id in k or 'diagnostico_editavel' in k or 'doc_gerado' in k]
-            for key in keys_to_clear:
-                del st.session_state[key]
-            st.rerun()
+    # Menu lateral
+    st.sidebar.title("Menu")
+    if st.sidebar.button("Projeto", key="nav_carregar", use_container_width=True, disabled=st.session_state['secao_atual'] == "📥 Carregar Projeto"):
+        st.session_state['secao_atual'] = "📥 Carregar Projeto"
+        st.rerun()
+    
+    if st.sidebar.button("Diagnóstico", key="nav_diagnostico", use_container_width=True, disabled=st.session_state['secao_atual'] == "🔍 Fazer Diagnóstico"):
+        st.session_state['secao_atual'] = "🔍 Fazer Diagnóstico"
+        st.rerun()
+    
+    if st.sidebar.button("Documentos", key="nav_documentos", use_container_width=True, disabled=st.session_state['secao_atual'] == "📄 Gerar Documentos"):
+        st.session_state['secao_atual'] = "📄 Gerar Documentos"
+        st.rerun()
 
-    st.title(f"✏️ Editando: {projeto.get('nome', 'Projeto sem nome')}")
+    # Botão Voltar
+    st.sidebar.divider()
+    if st.sidebar.button("⬅️ Voltar para Projetos"):
+        st.session_state['pagina_atual'] = 'projetos'
+        # Limpar estados específicos da página de edição ao sair
+        keys_to_clear = [k for k in st.session_state.keys() if projeto_id in k or 'diagnostico_editavel' in k or 'doc_gerado' in k]
+        for key in keys_to_clear:
+            del st.session_state[key]
+        st.rerun()
+
+    # Título da seção atual
+    if st.session_state['secao_atual'] == "📥 Carregar Projeto":
+        st.title("Projeto")
+    elif st.session_state['secao_atual'] == "🔍 Fazer Diagnóstico":
+        st.title("Diagnóstico")
+    elif st.session_state['secao_atual'] == "📄 Gerar Documentos":
+        st.title("Documentos")
 
     # --- Seção 1: Carregar Projeto ---
     if st.session_state['secao_atual'] == "📥 Carregar Projeto":
-        st.header("Carregar Conteúdo do Projeto")
-
         if 'ultimas_alteracoes' in st.session_state and st.session_state['ultimas_alteracoes']['projeto_id'] == projeto_id:
             st.success("✅ Alterações aplicadas com sucesso!")
-            st.subheader("Detalhes da última alteração:")
             st.write(st.session_state['ultimas_alteracoes']['alteracoes'])
             del st.session_state['ultimas_alteracoes']
 
@@ -115,16 +135,10 @@ def pagina_editar_projeto():
             st.session_state[f'current_texto_input_{projeto_id}'] = texto_inicial_textarea
             st.session_state[f'current_texto_input_pid'] = projeto_id
 
-        if texto_inicial_textarea:
-            st.success("📄 Conteúdo do projeto já existente carregado.")
-        else:
-            st.info("Nenhum conteúdo existente foi encontrado para este projeto.")
-
-        st.subheader("🧾 Inserir ou editar conteúdo do projeto")
         modo_entrada = st.radio("Escolha a forma de entrada:", ["✍️ Digitar texto", "📄 Importar PDF"], horizontal=True, key=f"modo_entrada_{projeto_id}")
 
         if modo_entrada == "✍️ Digitar texto":
-            texto_digitado = st.text_area("Digite ou edite o conteúdo do projeto:", 
+            texto_digitado = st.text_area("Conteúdo do projeto", 
                                        value=st.session_state.get(f'current_texto_input_{projeto_id}', texto_inicial_textarea), 
                                        height=300, 
                                        key=f"caixa_texto_manual_{projeto_id}")
@@ -132,15 +146,6 @@ def pagina_editar_projeto():
                 st.session_state[f'current_texto_input_{projeto_id}'] = texto_digitado
 
         elif modo_entrada == "📄 Importar PDF":
-            # Adiciona informações sobre limites de tamanho
-            st.info("""
-            📝 **Dicas para importação de PDF:**
-            - Tamanho máximo recomendado: 10MB
-            - Para arquivos maiores, considere dividir em partes menores
-            - Certifique-se que o PDF não está protegido por senha
-            - O texto deve estar selecionável (não apenas imagens)
-            """)
-            
             arquivo = st.file_uploader("Selecione o arquivo PDF", type=["pdf"], key=f"pdf_uploader_novo_{projeto_id}")
             
             if arquivo:
@@ -164,12 +169,11 @@ def pagina_editar_projeto():
                             else:
                                 st.session_state[f'current_texto_input_{projeto_id}'] = texto_input_pdf
                                 st.success(f"✅ PDF carregado com sucesso! ({len(texto_input_pdf)} caracteres extraídos)")
-                                st.text_area("Conteúdo extraído do PDF (visualização)", 
+                                st.text_area("Visualização do conteúdo extraído", 
                                         value=st.session_state[f'current_texto_input_{projeto_id}'], 
                                         height=200, 
                                         key=f"visualizacao_pdf_{projeto_id}", 
                                         disabled=True)
-                                st.info("Para editar o conteúdo do PDF, selecione 'Digitar texto' e o conteúdo será copiado para a caixa de edição.")
                         except Exception as e:
                             st.error(f"Erro ao extrair texto do PDF: {str(e)}")
                             if "password" in str(e).lower():
@@ -178,7 +182,6 @@ def pagina_editar_projeto():
                                 st.error("Erro ao processar o PDF. O arquivo pode estar corrompido ou em formato não suportado.")
                             st.code(traceback.format_exc())
                         finally:
-                            # Limpa o arquivo temporário
                             try:
                                 os.remove(temp_path)
                             except:
@@ -189,7 +192,7 @@ def pagina_editar_projeto():
         
         texto_para_salvar = st.session_state.get(f'current_texto_input_{projeto_id}', '')
 
-        if st.button("💾 Salvar Conteúdo no Projeto", key=f"salvar_conteudo_{projeto_id}"):
+        if st.button("💾 Salvar", key=f"salvar_conteudo_{projeto_id}"):
             if texto_para_salvar.strip():
                 try:
                     doc_ref = db.collection('projetos').document(projeto_id)
@@ -204,9 +207,7 @@ def pagina_editar_projeto():
                                 'texto_projeto': texto_para_salvar.strip(),
                                 'ultima_atualizacao': firestore.SERVER_TIMESTAMP
                             })
-                            # Update local session state for texto_projeto as well
                             st.session_state[f'texto_projeto_{projeto_id}'] = texto_para_salvar.strip()
-                            # Update the main project object in session if it's there
                             if 'projeto_selecionado' in st.session_state and st.session_state['projeto_selecionado']['id'] == projeto_id:
                                 st.session_state['projeto_selecionado']['texto_projeto'] = texto_para_salvar.strip()
                         st.success("✅ Conteúdo do projeto salvo com sucesso!")
@@ -219,6 +220,65 @@ def pagina_editar_projeto():
                     st.code(traceback.format_exc()) 
             else:
                 st.warning("Por favor, forneça um conteúdo antes de salvar.")
+
+        # Campo de prompt para alterar o texto
+        st.divider()
+        st.subheader("🤖 Alterar texto com IA")
+        prompt_alteracao = st.text_area("Digite suas instruções para alterar o texto:", height=100, key=f"prompt_alteracao_{projeto_id}")
+        
+        if st.button("✨ Aplicar Alterações", key=f"aplicar_alteracoes_{projeto_id}"):
+            if prompt_alteracao.strip():
+                with st.spinner("Processando alterações..."):
+                    try:
+                        texto_atual = st.session_state.get(f'current_texto_input_{projeto_id}', '')
+                        prompt_template = f"""
+Você é um editor especialista em aprimorar textos de projetos.
+Com base nas instruções fornecidas, modifique o texto do projeto mantendo sua essência e estrutura.
+
+[INSTRUÇÕES DE ALTERAÇÃO]:
+{prompt_alteracao}
+
+[TEXTO ORIGINAL DO PROJETO]:
+{texto_atual}
+
+Por favor, forneça o texto modificado seguindo as instruções acima. Mantenha a estrutura geral do texto, apenas aplicando as alterações solicitadas.
+"""
+                        # Criar um container vazio para o streaming
+                        texto_container = st.empty()
+                        texto_modificado_stream = ""
+                        update_counter = 0
+                        
+                        def update_texto_stream(text):
+                            nonlocal texto_modificado_stream, update_counter
+                            texto_modificado_stream += text
+                            update_counter += 1
+                            texto_container.text_area("Conteúdo do projeto", 
+                                                   value=texto_modificado_stream,
+                                                   height=300,
+                                                   key=f"texto_modificado_stream_{projeto_id}_{update_counter}")
+                            time.sleep(0.005)  # Pequeno delay para visualização suave
+
+                        # Usar streaming para a resposta do LLM
+                        for chunk in llm.stream(prompt_template):
+                            if hasattr(chunk, 'content'):
+                                update_texto_stream(chunk.content)
+                            else:
+                                update_texto_stream(str(chunk))
+                        
+                        texto_modificado = texto_modificado_stream.strip()
+                        
+                        if texto_modificado:
+                            # Atualizar o estado da sessão com o texto final
+                            st.session_state[f'current_texto_input_{projeto_id}'] = texto_modificado
+                            st.success("✅ Alterações aplicadas! Revise o texto acima e salve se estiver satisfeito.")
+                            st.rerun()  # Rerun apenas uma vez no final
+                        else:
+                            st.error("Não foi possível gerar alterações no texto.")
+                    except Exception as e:
+                        st.error(f"Erro ao processar alterações: {str(e)}")
+                        st.code(traceback.format_exc())
+            else:
+                st.warning("Por favor, forneça instruções para as alterações.")
 
     # --- Seção 2: Fazer Diagnóstico ---
     elif st.session_state['secao_atual'] == "🔍 Fazer Diagnóstico":
@@ -239,10 +299,21 @@ def pagina_editar_projeto():
                     try:
                         diagnostico_container = st.empty()
                         diagnostico_texto_stream = ""
+                        update_counter = 0
+                        buffer = ""
+                        
                         def update_diagnostico_stream(text):
-                            nonlocal diagnostico_texto_stream
-                            diagnostico_texto_stream += text
-                            diagnostico_container.markdown(diagnostico_texto_stream)
+                            nonlocal diagnostico_texto_stream, update_counter, buffer
+                            buffer += text
+                            # Atualiza a cada 50 caracteres ou quando receber uma quebra de linha
+                            if len(buffer) >= 50 or '\n' in text:
+                                diagnostico_texto_stream += buffer
+                                update_counter += 1
+                                diagnostico_container.text_area("Diagnóstico", 
+                                                             value=diagnostico_texto_stream,
+                                                             height=400,
+                                                             key=f"diagnostico_stream_{projeto_id}_{update_counter}")
+                                buffer = ""
                         
                         # Buscar informações do edital associado no Firestore
                         edital_associado_id = projeto.get('edital_associado')
@@ -273,14 +344,20 @@ def pagina_editar_projeto():
                         analise_edital_stream = avaliar_contra_edital(texto_projeto_atual, texto_edital_context, texto_selecionados_context)
                         for char in analise_edital_stream: 
                             update_diagnostico_stream(char)
-                            time.sleep(0.005)
+                        
+                        # Garantir que o buffer final seja processado
+                        if buffer:
+                            update_diagnostico_stream("\n")
                         
                         update_diagnostico_stream("\n\n")
                         
                         comparativo_stream = comparar_com_selecionados(texto_projeto_atual, texto_edital_context, texto_selecionados_context)
                         for char in comparativo_stream: 
                             update_diagnostico_stream(char)
-                            time.sleep(0.005)
+                        
+                        # Garantir que o buffer final seja processado
+                        if buffer:
+                            update_diagnostico_stream("\n")
                         
                         diagnostico_final_completo = diagnostico_texto_stream 
 
@@ -345,56 +422,251 @@ def pagina_editar_projeto():
                         st.warning("Diagnóstico está vazio. Nada para salvar.")
                 
                 st.markdown("---")
-                st.subheader("🤖 Aplicar Melhorias no Texto do Projeto com IA (usando o diagnóstico acima)")
+                st.subheader("🤖 Ver Sugestões de Melhorias no Texto do Projeto")
                 st.markdown("""
-                A IA tentará incorporar as sugestões e melhorias do diagnóstico (editado ou original) de forma integrada no texto original do projeto.
-                **Atenção:** O texto original do projeto será substituído pela versão revisada.
+                A IA analisará o diagnóstico e sugerirá melhorias específicas para o texto do projeto.
+                Você poderá revisar e aprovar cada sugestão individualmente antes de aplicá-las.
                 """)
 
                 diagnostico_para_aplicar = st.session_state.get(f'diagnostico_editavel_{projeto_id}', texto_diagnostico_atual_db)
 
-                if st.button("✨ Revisar Texto do Projeto Usando o Diagnóstico Acima", key=f"aplicar_diagnostico_llm_{projeto_id}"):
+                if st.button("✨ Ver Sugestões de Melhorias", key=f"ver_sugestoes_{projeto_id}"):
                     if not diagnostico_para_aplicar.strip():
-                        st.warning("O diagnóstico está vazio. Não é possível aplicar melhorias.")
+                        st.warning("O diagnóstico está vazio. Não é possível gerar sugestões.")
                     else:
-                        with st.spinner("IA trabalhando para refinar seu projeto... Por favor, aguarde."):
-                            # (Lógica de revisão do texto do projeto pela LLM com base no diagnóstico_para_aplicar)
+                        with st.spinner("IA analisando e preparando sugestões de melhorias..."):
                             try:
-                                # ... (prompt e chamada LLM como na versão anterior, usando 'diagnostico_para_aplicar') ...
-                                prompt_template_revisao = """
+                                # Buscar o texto atual do projeto da sessão
+                                texto_projeto_atual = st.session_state.get(f'texto_projeto_{projeto_id}', projeto.get('texto_projeto', ''))
+                                
+                                if not texto_projeto_atual.strip():
+                                    st.warning("O texto do projeto está vazio. Por favor, adicione conteúdo na seção 'Carregar Projeto' primeiro.")
+                                    return
+
+                                prompt_template_sugestoes = """
 Você é um editor especialista em aprimorar propostas de projetos e editais.
-Sua tarefa é revisar e reescrever o TEXTO ORIGINAL DO PROJETO abaixo. Utilize o DIAGNÓSTICO DO PROJETO fornecido como um guia detalhado para identificar áreas de melhoria.
-Incorpore de forma coesa e integrada as sugestões, correções e pontos de aprimoramento apontados no DIAGNÓSTICO.
-O objetivo é produzir uma nova versão do TEXTO ORIGINAL DO PROJETO que esteja significativamente melhorada, mais clara, completa, persuasiva e alinhada com as recomendações do DIAGNÓSTICO.
-Mantenha o tom e o escopo essenciais do projeto, a menos que o DIAGNÓSTICO sugira alterações explícitas nesses aspectos. Se o DIAGNÓSTICO não contiver sugestões aplicáveis ou se o TEXTO ORIGINAL DO PROJETO já for excelente e não necessitar de alterações com base no DIAGNÓSTICO, retorne o TEXTO ORIGINAL DO PROJETO inalterado.
-Certifique-se de retornar APENAS o texto do projeto revisado e aprimorado. Não inclua preâmbulos, saudações, comentários ou qualquer metadiscurso.
-[TEXTO ORIGINAL DO PROJETO]:\n{texto_original}\n\n[DIAGNÓSTICO DO PROJETO]:\n{texto_diagnostico}\n\n[TEXTO DO PROJETO REVISADO E APRIMORADO]:"""
-                                prompt_revisao = prompt_template_revisao.format(
+Analise o TEXTO ORIGINAL DO PROJETO e o DIAGNÓSTICO DO PROJETO fornecidos.
+
+O DIAGNÓSTICO contém uma análise detalhada dos pontos fortes e fracos do projeto, bem como recomendações de melhoria.
+Sua tarefa é usar essas informações do diagnóstico para identificar trechos específicos no TEXTO ORIGINAL DO PROJETO que precisam ser melhorados.
+
+Para cada problema identificado no diagnóstico:
+1. Encontre o trecho correspondente no texto original do projeto que precisa ser modificado
+2. Baseado nas recomendações do diagnóstico, proponha uma melhoria específica para esse trecho
+3. Forneça o novo texto que deve substituir o trecho original
+
+Formate cada sugestão assim:
+[SUGESTÃO X]
+Trecho Original: [copie o trecho exato do texto original do projeto que precisa ser melhorado]
+Proposta de Mudança: [explique como este trecho deve ser melhorado, baseado no diagnóstico]
+Novo Texto: [forneça o novo texto que deve substituir o trecho original]
+
+[TEXTO ORIGINAL DO PROJETO]:
+{texto_original}
+
+[DIAGNÓSTICO DO PROJETO]:
+{texto_diagnostico}
+
+[SUGESTÕES DE MELHORIAS]:
+"""
+                                prompt_sugestoes = prompt_template_sugestoes.format(
                                     texto_original=texto_projeto_atual,
                                     texto_diagnostico=diagnostico_para_aplicar
                                 )
-                                response_revisao = llm.invoke(prompt_revisao) 
-                                texto_projeto_revisado = (response_revisao.content if hasattr(response_revisao, 'content') else str(response_revisao)).strip()
+                                try:
+                                    def invoke_llm():
+                                        response = llm.invoke(prompt_sugestoes)
+                                        return response.content if hasattr(response, 'content') else str(response)
+                                    
+                                    sugestoes_texto = retry_with_backoff(invoke_llm).strip()
+                                except Exception as e:
+                                    error_msg = str(e)
+                                    if "insufficient_quota" in error_msg.lower():
+                                        st.error("""
+                                        ⚠️ Erro de quota na API da OpenAI após várias tentativas. Isso pode ocorrer por:
+                                        1. Limite de requisições por minuto atingido
+                                        2. Problemas com a faturação da conta
+                                        3. Saldo em uma conta diferente da configurada
+                                        
+                                        Por favor, verifique:
+                                        - Se a conta está corretamente configurada
+                                        - Se há saldo disponível na conta correta
+                                        - Se a faturação está em dia
+                                        - Aguarde alguns minutos e tente novamente
+                                        """)
+                                        
+                                        # Adiciona botão para tentar novamente
+                                        if st.button("🔄 Tentar Novamente"):
+                                            st.rerun()
+                                    else:
+                                        st.error(f"Erro ao gerar sugestões: {error_msg}")
+                                    st.code(traceback.format_exc())
+                                    return
 
-                                if not texto_projeto_revisado: st.error("A IA não retornou um texto revisado."); return
+                                if not sugestoes_texto:
+                                    st.error("A IA não retornou sugestões de melhorias.")
+                                    return
 
-                                db.collection('projetos').document(projeto_id).update({
-                                    'texto_projeto': texto_projeto_revisado,
-                                    'ultima_atualizacao': firestore.SERVER_TIMESTAMP,
-                                    'diagnostico_aplicado_em_revisao': diagnostico_para_aplicar
-                                })
-                                st.session_state[f'texto_projeto_{projeto_id}'] = texto_projeto_revisado
-                                if 'projeto_selecionado' in st.session_state and st.session_state['projeto_selecionado']['id'] == projeto_id:
-                                    st.session_state['projeto_selecionado']['texto_projeto'] = texto_projeto_revisado
-                                st.session_state['ultimas_alteracoes'] = {
-                                    'projeto_id': projeto_id,
-                                    'alteracoes': "Texto do projeto revisado pela IA com base no diagnóstico.",
-                                    'nome_projeto': projeto.get('nome', 'Projeto sem nome')
-                                }
-                                st.success("✅ Texto do projeto revisado pela IA e salvo!"); st.info("Redirecionando...");
-                                time.sleep(2.5); st.session_state['secao_atual'] = "📥 Carregar Projeto"; st.rerun()
+                                # Processar e exibir as sugestões
+                                sugestoes = []
+                                sugestao_atual = {}
+                                for linha in sugestoes_texto.split('\n'):
+                                    if linha.startswith('[SUGESTÃO'):
+                                        if sugestao_atual:
+                                            sugestoes.append(sugestao_atual)
+                                        sugestao_atual = {'numero': linha.strip('[]')}
+                                    elif linha.startswith('Trecho Original:'):
+                                        sugestao_atual['original'] = linha.replace('Trecho Original:', '').strip()
+                                    elif linha.startswith('Proposta de Mudança:'):
+                                        sugestao_atual['mudanca'] = linha.replace('Proposta de Mudança:', '').strip()
+                                    elif linha.startswith('Novo Texto:'):
+                                        sugestao_atual['novo'] = linha.replace('Novo Texto:', '').strip()
+                                if sugestao_atual:
+                                    sugestoes.append(sugestao_atual)
+
+                                # Salvar sugestões no Firestore
+                                try:
+                                    doc_ref = db.collection('projetos').document(projeto_id)
+                                    doc_ref.update({
+                                        'sugestoes': sugestoes,
+                                        'sugestoes_aprovadas': [],
+                                        'ultima_atualizacao': firestore.SERVER_TIMESTAMP
+                                    })
+                                except Exception as e:
+                                    st.error(f"Erro ao salvar sugestões: {str(e)}")
+                                    st.code(traceback.format_exc())
+
+                                # Armazenar sugestões na sessão
+                                st.session_state[f'sugestoes_{projeto_id}'] = sugestoes
+                                st.session_state[f'sugestoes_aprovadas_{projeto_id}'] = []
+
+                                st.success(f"✅ {len(sugestoes)} sugestões de melhorias identificadas!")
+                                st.rerun()
+
                             except Exception as e:
-                                st.error(f"Erro ao aplicar diagnóstico com IA: {str(e)}"); st.code(traceback.format_exc())
+                                st.error(f"Erro ao gerar sugestões: {str(e)}")
+                                st.code(traceback.format_exc())
+
+                # Exibir sugestões para aprovação
+                if f'sugestoes_{projeto_id}' in st.session_state:
+                    sugestoes = st.session_state[f'sugestoes_{projeto_id}']
+                    sugestoes_aprovadas = st.session_state.get(f'sugestoes_aprovadas_{projeto_id}', [])
+
+                    # Carregar sugestões aprovadas do Firestore se não estiverem na sessão
+                    if not sugestoes_aprovadas:
+                        try:
+                            doc_ref = db.collection('projetos').document(projeto_id)
+                            doc_snapshot = doc_ref.get()
+                            if doc_snapshot.exists:
+                                projeto_data = doc_snapshot.to_dict()
+                                sugestoes_aprovadas_db = projeto_data.get('sugestoes_aprovadas', [])
+                                if sugestoes_aprovadas_db:
+                                    sugestoes_aprovadas = sugestoes_aprovadas_db
+                                    st.session_state[f'sugestoes_aprovadas_{projeto_id}'] = sugestoes_aprovadas
+                        except Exception as e:
+                            st.error(f"Erro ao carregar sugestões aprovadas: {str(e)}")
+
+                    st.markdown("""
+                    <style>
+                        .sugestao-box {
+                            background-color: #f8f9fa;
+                            border-radius: 10px;
+                            padding: 1rem;
+                            margin-bottom: 1rem;
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                            max-width: 100%;
+                            overflow-wrap: break-word;
+                        }
+                        .sugestao-box h4 {
+                            margin-top: 0;
+                            color: #2c3e50;
+                            font-size: 1.1em;
+                        }
+                        .sugestao-box p {
+                            margin: 0.5rem 0;
+                            line-height: 1.5;
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                        }
+                    </style>
+                    """, unsafe_allow_html=True)
+
+                    st.subheader("📝 Sugestões de Melhorias")
+                    for i, sugestao in enumerate(sugestoes):
+                        with st.expander(f"Sugestão {i+1}: {sugestao['mudanca'][:50]}..."):
+                            st.markdown("**Trecho Original:**")
+                            st.markdown(f'<div class="sugestao-box"><p>{sugestao["original"]}</p></div>', unsafe_allow_html=True)
+                            
+                            st.markdown("**Proposta de Mudança:**")
+                            st.markdown(f'<div class="sugestao-box"><p>{sugestao["mudanca"]}</p></div>', unsafe_allow_html=True)
+                            
+                            st.markdown("**Novo Texto:**")
+                            st.markdown(f'<div class="sugestao-box"><p>{sugestao["novo"]}</p></div>', unsafe_allow_html=True)
+                            
+                            if i not in sugestoes_aprovadas:
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    if st.button(f"✅ Aprovar Sugestão {i+1}", key=f"aprovar_{i}_{projeto_id}"):
+                                        sugestoes_aprovadas.append(i)
+                                        st.session_state[f'sugestoes_aprovadas_{projeto_id}'] = sugestoes_aprovadas
+                                        
+                                        # Aplicar a sugestão ao texto do projeto
+                                        texto_atual = st.session_state.get(f'texto_projeto_{projeto_id}', projeto.get('texto_projeto', ''))
+                                        texto_original = sugestao['original']
+                                        texto_novo = sugestao['novo']
+                                        
+                                        if texto_original in texto_atual:
+                                            texto_atualizado = texto_atual.replace(texto_original, texto_novo)
+                                            
+                                            # Atualizar na sessão
+                                            st.session_state[f'texto_projeto_{projeto_id}'] = texto_atualizado
+                                            st.session_state[f'current_texto_input_{projeto_id}'] = texto_atualizado
+                                            
+                                            # Atualizar no Firestore
+                                            try:
+                                                doc_ref = db.collection('projetos').document(projeto_id)
+                                                doc_ref.update({
+                                                    'texto_projeto': texto_atualizado,
+                                                    'sugestoes_aprovadas': sugestoes_aprovadas,
+                                                    'ultima_atualizacao': firestore.SERVER_TIMESTAMP
+                                                })
+                                                
+                                                # Atualizar o projeto na sessão se existir
+                                                if 'projeto_selecionado' in st.session_state and st.session_state['projeto_selecionado']['id'] == projeto_id:
+                                                    st.session_state['projeto_selecionado']['texto_projeto'] = texto_atualizado
+                                                
+                                                # Forçar atualização da seção "Carregar Projeto"
+                                                st.session_state['secao_atual'] = "📥 Carregar Projeto"
+                                                st.success(f"Sugestão {i+1} aprovada e aplicada ao texto do projeto!")
+                                                time.sleep(1)
+                                                st.rerun()
+                                            except Exception as e:
+                                                st.error(f"Erro ao salvar alterações: {str(e)}")
+                                        else:
+                                            st.warning(f"Não foi possível encontrar o trecho original no texto do projeto.")
+                                        
+                                        st.rerun()
+                                with col2:
+                                    if st.button(f"❌ Recusar Sugestão {i+1}", key=f"recusar_{i}_{projeto_id}"):
+                                        # Remover a sugestão da lista
+                                        sugestoes.pop(i)
+                                        st.session_state[f'sugestoes_{projeto_id}'] = sugestoes
+                                        
+                                        # Atualizar no Firestore
+                                        try:
+                                            doc_ref = db.collection('projetos').document(projeto_id)
+                                            doc_ref.update({
+                                                'sugestoes': sugestoes,
+                                                'ultima_atualizacao': firestore.SERVER_TIMESTAMP
+                                            })
+                                            st.success(f"Sugestão {i+1} removida!")
+                                        except Exception as e:
+                                            st.error(f"Erro ao remover sugestão: {str(e)}")
+                                        
+                                        st.rerun()
+                            else:
+                                st.button("✅ Sugestão Aprovada", key=f"aprovado_{i}_{projeto_id}", disabled=True)
             else:
                 st.info("Nenhum diagnóstico encontrado. Execute a 'Análise Automática' ou adicione/edite um diagnóstico manualmente.")
 
