@@ -847,10 +847,12 @@ def main():
     is_authenticated = st.session_state.get(AUTENTICADO_SESSION_KEY, False)
     current_page = st.session_state.get(PAGINA_ATUAL_SESSION_KEY, 'login')
 
-    # Se não estiver autenticado, mostra a página de login ou cadastro
+    # Se não estiver autenticado, mostra a página de login, cadastro ou reset de senha
     if not is_authenticated:
         if current_page == 'cadastro':
             pagina_cadastro()
+        elif current_page == 'reset_password':
+            pagina_reset_password()
         else:
             pagina_login()
         return
