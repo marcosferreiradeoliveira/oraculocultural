@@ -1,6 +1,7 @@
 import streamlit as st
 from firebase_admin import firestore
 from google.cloud.firestore_v1 import FieldFilter
+from google.api_core.datetime_helpers import DatetimeWithNanoseconds as GCloudTimestamp
 from constants import (
     USER_SESSION_KEY, 
     AUTENTICADO_SESSION_KEY, 
@@ -14,7 +15,7 @@ from constants import (
     JUSTIFICATIVA_KEY,
     EDITAL_SELECIONADO_KEY
 )
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 def pagina_perfil():
@@ -97,64 +98,22 @@ def pagina_perfil():
                 is_premium_user = is_premium # Atualiza a flag
                 status_conta_texto = "Premium ✨" if is_premium else "Gratuito"
                 
-                # Obter data de ativação e calcular data de renovação
-                if is_premium and usuario_doc_data.get('data_ativacao_premium'):
-                    data_ativacao = usuario_doc_data['data_ativacao_premium']
-                    # Calcular data de renovação (30 dias após ativação)
-                    if isinstance(data_ativacao, Timestamp):
-                        data_renovacao = Timestamp.from_datetime(
-                            data_ativacao.to_datetime() + timedelta(days=30)
-                        )
+                # Obter nome da empresa
+                nome_empresa = usuario_doc_data.get('empresa', '')
                 
                 st.subheader(nome_para_exibir)
+                st.write(f"**Nome:** {nome_para_exibir}")
+                if nome_empresa:
+                    st.write(f"**Empresa:** {nome_empresa}")
                 st.write(f"**Email:** {email_para_exibir}")
                 st.write(f"**Status da Conta:** {status_conta_texto}")
 
-                # Exibir mensagem de trial expirado ANTES da seção de biografia, se aplicável
-                if forced_view and not is_premium_user:
-                    st.info("Seu período de teste de 24 horas expirou. Para continuar acessando seus projetos e outras funcionalidades, por favor, escolha um plano.")
-
-                # Seção de Upgrade de Plano (só exibe se o usuário não for premium)
-                if not is_premium_user:
-                    st.subheader("🚀 Faça um Upgrade no seu Plano!")
-                    st.markdown("Desbloqueie todo o potencial da nossa plataforma.")
-
-                    col_trial, col_premium_upgrade = st.columns(2)
-
-                    with col_trial:
-                        with st.container(border=True):
-                            st.markdown("### ⏳ Teste Premium por 1 Dia")
-                            st.markdown(
-                                """
-                                Experimente todos os recursos exclusivos do plano Premium gratuitamente por 24 horas!
-                                Ideal para você conhecer na prática como podemos te ajudar a alcançar seus objetivos.
-                                """
-                            )
-                            if not forced_view and st.button("✨ Iniciar Teste Gratuito (1 Dia)", key="start_trial_button", use_container_width=True):
-                                st.success("Funcionalidade de teste de 1 dia ainda em desenvolvimento!")
-                                # Lógica para ativar o trial no backend (ex: atualizar Firestore)
-
-                    with col_premium_upgrade:
-                        with st.container(border=True):
-                            st.markdown("### ⭐ Seja Premium")
-                            st.markdown(
-                                """
-                                Tenha acesso ilimitado e vantagens exclusivas:
-                                - Criação **ilimitada** de projetos.
-                                - Acesso a **modelos de editais avançados**.
-                                - Ferramentas de **análise de viabilidade** detalhadas.
-                                - **Diagnóstico IA** mais completo para seus projetos.
-                                - **Geração de documentos** em múltiplos formatos.
-                                - **Suporte prioritário** e personalizado.
-                                - **Valor:** R$ 99,00 / mês
-                                """
-                            )
-                            if st.button("💎 Fazer Upgrade para Premium", key="upgrade_premium_button", type="primary", use_container_width=True):
-                                st.info("Redirecionando para a página de upgrade...")
-                                # Lógica para redirecionar para pagamento/upgrade
-                                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'pagamento_upgrade'
-                                st.rerun()
-                    st.divider() # Divider após a seção de upgrade
+                # Botão para acessar a página de assinatura (menor)
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    if st.button("💎 Gerenciar Assinatura", key="gerenciar_assinatura"):
+                        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'assinatura'
+                        st.rerun()
 
                 # Seção de Biografia Profissional
                 st.divider()
@@ -225,7 +184,7 @@ def pagina_perfil():
                 
                 with col2:
                     endereco = st.text_area("Endereço", value=usuario_doc_data.get('endereco', ''))
-                    nome_empresa = st.text_input("Nome da Empresa", value=usuario_doc_data.get('nome_empresa', ''))
+                    nome_empresa = st.text_input("Nome da Empresa", value=usuario_doc_data.get('empresa', ''))
                     endereco_empresa = st.text_area("Endereço da Empresa", value=usuario_doc_data.get('endereco_empresa', ''))
                     cnpj = st.text_input("CNPJ da Empresa", value=usuario_doc_data.get('cnpj', ''))
                     bio_empresa = st.text_area("Biografia da Empresa", value=usuario_doc_data.get('bio_empresa', ''), height=100)
@@ -240,7 +199,7 @@ def pagina_perfil():
                             'cpf': cpf,
                             'data_nascimento': data_nascimento.isoformat(),
                             'endereco': endereco,
-                            'nome_empresa': nome_empresa,
+                            'empresa': nome_empresa,
                             'endereco_empresa': endereco_empresa,
                             'cnpj': cnpj,
                             'bio_empresa': bio_empresa,
@@ -253,41 +212,6 @@ def pagina_perfil():
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao atualizar dados cadastrais: {str(e)}")
-
-                # Mostrar informações de assinatura para usuários premium
-                if is_premium_user:
-                    st.divider()
-                    st.subheader("📅 Informações da Assinatura")
-                    if data_ativacao:
-                        st.write(f"**Data de Ativação:** {data_ativacao.strftime('%d/%m/%Y')}")
-                    if data_renovacao:
-                        st.write(f"**Próxima Renovação:** {data_renovacao.strftime('%d/%m/%Y')}")
-                    
-                    # Botão para cancelar assinatura
-                    if st.button("❌ Cancelar Assinatura", type="secondary"):
-                        if st.warning("Tem certeza que deseja cancelar sua assinatura?"):
-                            try:
-                                # Atualizar status no Firestore
-                                user_ref = db.collection('usuarios').document(user_uid_auth)
-                                user_ref.update({
-                                    'premium': False,
-                                    'data_cancelamento': firestore.SERVER_TIMESTAMP,
-                                    'ultima_atualizacao': firestore.SERVER_TIMESTAMP
-                                })
-                                st.success("Sua assinatura foi cancelada com sucesso!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao cancelar assinatura: {str(e)}")
-            else:
-                # Usuário não encontrado na coleção 'usuarios'
-                st.subheader(nome_para_exibir)
-                st.write(f"**Email:** {email_para_exibir}")
-                st.write("**Status da Conta:** Informação não disponível (usuário não encontrado na base de dados específica).")
-        else:
-            # UID do usuário não encontrado em user_info
-            st.subheader(nome_para_exibir)
-            st.write(f"**Email:** {email_para_exibir}")
-            st.write("**Status da Conta:** Não verificado (UID do usuário ausente na sessão).")
 
     except Exception as e:
         st.subheader(nome_para_exibir) # Exibe nome e email mesmo em caso de erro na busca do status
