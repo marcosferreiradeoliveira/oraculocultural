@@ -437,6 +437,7 @@ def pagina_login():
         st.markdown('<div class="forgot-password-container">', unsafe_allow_html=True)
         if st.button("Esqueci minha senha", key="forgot_password_btn", type="secondary"):
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'reset_password'
+            st.session_state[AUTENTICADO_SESSION_KEY] = False
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
