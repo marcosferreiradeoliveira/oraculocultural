@@ -132,7 +132,7 @@ def pagina_login():
             justify-content: center; align-items: center;
             padding: 0 2rem 2rem 2rem !important;
             box-shadow: -10px 0 15px -3px rgba(0,0,0,0.1) !important;
-            height: 100%; border-radius: 2rem 0 0 2rem !important;
+            height: 100%; border-radius: 2rem !important;
         }
         .login-right-panel > *:first-child {
             margin-top: 0 !important;
@@ -364,7 +364,7 @@ def pagina_login():
             <div class="login-right-panel">
                 <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24' fill='none' stroke='%237e22ce' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpath d='M12 16c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4z'%3E%3C/path%3E%3Cpath d='M12 8v-2'%3E%3C/path%3E%3Cpath d='M12 18v-2'%3E%3C/path%3E%3Cpath d='M8 12h-2'%3E%3C/path%3E%3Cpath d='M18 12h-2'%3E%3C/path%3E%3C/svg%3E" class="logo" alt="Oráculo Cultural Logo">
                 <h2>Bem-vindo ao Oráculo Cultural</h2>
-                <p class="subtitle">Aproveite o trial de 7 dias para experimentar a ferramenta à vontade</p>
+                <p class="subtitle">Aproveite de forma gratuita por 7 dias</p>
             </div>
         """, unsafe_allow_html=True)
 
