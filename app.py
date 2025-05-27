@@ -108,11 +108,12 @@ except ImportError as e:
     st.stop()
 from paginas.reset_password import pagina_reset_password
 from paginas.cadastro import pagina_cadastro
-from paginas.pagina_perfil import pagina_perfil # Nova importação
+from paginas.pagina_perfil import pagina_perfil
 from paginas.pagina_cadastro_edital import pagina_cadastro_edital # Mantido
 from paginas.pagina_pagamento_upgrade import pagina_pagamento_upgrade, pagina_payment_success, pagina_payment_failure, pagina_payment_pending # Modificado
 from paginas.pagina_cadastro_projeto import pagina_cadastro_projeto
 from paginas.pagina_editar_edital import pagina_editar_edital
+from paginas.pagina_assinatura import pagina_assinatura
 
 # CSS customizado global
 st.markdown("""
@@ -906,8 +907,8 @@ def main():
                          
                          current_time = datetime.datetime.now(datetime.timezone.utc) # Use timezone-aware datetime
 
-                         # Check if registration is older than 24 hours
-                         if current_time - data_cadastro_dt > datetime.timedelta(hours=24):
+                         # Check if registration is older than 7 days
+                         if current_time - data_cadastro_dt > datetime.timedelta(days=7):
                              st.session_state['forced_profile_view'] = True
                          else:
                              # Trial is active, ensure flag is not set
@@ -969,6 +970,8 @@ def main():
                 st.error("ID do edital não encontrado")
                 st.session_state['pagina_atual'] = 'projetos'
                 st.rerun()
+        elif final_target_page == 'assinatura':
+            pagina_assinatura()
         else:
             # Fallback for unknown authenticated page
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
