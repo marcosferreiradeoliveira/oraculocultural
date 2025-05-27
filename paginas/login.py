@@ -443,9 +443,12 @@ def pagina_login():
         # Link de cadastro
         st.markdown('<div class="signup-link">', unsafe_allow_html=True)
         if st.button("Novo por aqui? Cadastre-se", key="signup_button", type="secondary", use_container_width=True):
-            st.session_state.clear()
+            # Limpar a sessão e definir a nova página
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro'
-            st.rerun()
+            st.session_state[AUTENTICADO_SESSION_KEY] = False
+            st.experimental_rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
