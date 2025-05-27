@@ -847,10 +847,12 @@ def main():
     is_authenticated = st.session_state.get(AUTENTICADO_SESSION_KEY, False)
     current_page = st.session_state.get(PAGINA_ATUAL_SESSION_KEY, 'login')
 
-    # Se não estiver autenticado, mostra a página de login
+    # Se não estiver autenticado, mostra a página de login ou cadastro
     if not is_authenticated:
-        # Remover o vídeo daqui, pois já está no login.py
-        pagina_login()
+        if current_page == 'cadastro':
+            pagina_cadastro()
+        else:
+            pagina_login()
         return
     else: # Usuário está autenticado
         current_page_on_entry = st.session_state[PAGINA_ATUAL_SESSION_KEY]
