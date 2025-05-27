@@ -1,72 +1,131 @@
 import streamlit as st
 import firebase_admin
 from firebase_admin import auth
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
 from constants import PAGINA_ATUAL_SESSION_KEY
-import time
+from services.firebase_init import initialize_firebase, get_error_message
+
+def send_reset_email(email, reset_link):
+    """Envia email com link de reset de senha"""
+    try:
+        # Configurações do email
+        sender_email = os.getenv('GMAIL_USER')
+        sender_password = os.getenv('GMAIL_APP_PASSWORD')
+        
+        # Criar mensagem
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = email
+        msg['Subject'] = "Redefinição de Senha - Oráculo Cultural"
+        
+        # Corpo do email
+        body = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #7e22ce;">Redefinição de Senha</h2>
+                    <p>Olá,</p>
+                    <p>Recebemos uma solicitação para redefinir sua senha no Oráculo Cultural.</p>
+                    <p>Clique no botão abaixo para criar uma nova senha:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{reset_link}" 
+                           style="background-color: #7e22ce; color: white; padding: 12px 24px; 
+                                  text-decoration: none; border-radius: 5px; display: inline-block;">
+                            Redefinir Senha
+                        </a>
+                    </div>
+                    <p>Se você não solicitou esta redefinição, por favor ignore este email.</p>
+                    <p>Este link é válido por 1 hora.</p>
+                    <hr style="border: 1px solid #eee; margin: 20px 0;">
+                    <p style="color: #666; font-size: 12px;">
+                        Este é um email automático, por favor não responda.
+                    </p>
+                </div>
+            </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(body, 'html'))
+        
+        # Conectar ao servidor SMTP do Gmail
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        
+        # Enviar email
+        server.send_message(msg)
+        server.quit()
+        
+        return True
+    except Exception as e:
+        st.error(f"Erro ao enviar email: {str(e)}")
+        return False
 
 def pagina_reset_password():
-    """Página para recuperação de senha"""
-
+    """Exibe a página de reset de senha"""
     st.markdown("""
-        <style>
-            .reset-container {
-                max-width: 400px;
-                margin: 2rem auto;
-                padding: 2rem;
-                background: white;
-                border-radius: 1rem;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            }
-            
-            .reset-title {
-                color: #1e293b;
-                font-size: 1.5rem;
-                font-weight: 600;
-                margin-bottom: 1rem;
-                text-align: center;
-            }
-            
-            .reset-description {
-                color: #64748b;
-                margin-bottom: 2rem;
-                text-align: center;
-            }
-        </style>
+    <style>
+        .reset-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        .reset-title {
+            color: #1e293b;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .reset-subtitle {
+            color: #64748b;
+            font-size: 1rem;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+    </style>
     """, unsafe_allow_html=True)
-    
-    # Exibe o formulário de recuperação de senha
-    with st.container():
-        st.markdown("""
-            <div class="reset-container">
-                <div style="text-align:center; margin-bottom: 1.5rem;">
-                    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24' fill='none' stroke='%237e22ce' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpath d='M12 16c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4z'%3E%3C/path%3E%3Cpath d='M12 8v-2'%3E%3C/path%3E%3Cpath d='M12 18v-2'%3E%3C/path%3E%3Cpath d='M8 12h-2'%3E%3C/path%3E%3Cpath d='M18 12h-2'%3E%3C/path%3E%3C/svg%3E" alt="Oráculo Cultural Logo" style="width:80px;height:80px;"/>
-                </div>
-                <h2 class="reset-title">Recuperar Senha</h2>
-                <p class="reset-description">Digite seu email para receber um link de recuperação de senha.</p>
-            </div>
-        """, unsafe_allow_html=True)
-    
+
+    st.markdown('<div class="reset-container">', unsafe_allow_html=True)
+    st.markdown('<h2 class="reset-title">Esqueceu sua senha?</h2>', unsafe_allow_html=True)
+    st.markdown('<p class="reset-subtitle">Digite seu email para receber um link de redefinição de senha.</p>', unsafe_allow_html=True)
+
     with st.form("reset_password_form"):
         email = st.text_input("Email", placeholder="seu@email.com")
-        submitted = st.form_submit_button("Enviar Link de Recuperação")
-        
-        if submitted:
-            if email:
-                try:
-                    # Gera e envia o link de recuperação de senha usando Firebase Auth
-                    auth.generate_password_reset_link(email)
-                    st.success("Email de recuperação enviado! Verifique sua caixa de entrada e spam.")
-                    time.sleep(2)
-                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
-                    st.rerun()
-                except firebase_admin.auth.UserNotFoundError:
-                    st.error("Nenhum usuário encontrado com este endereço de e-mail.")
-                except Exception as e:
-                    st.error(f"Erro ao enviar email de recuperação: {str(e)}")
+        submit = st.form_submit_button("Enviar Link de Redefinição")
+
+        if submit:
+            if not email:
+                st.error("Por favor, insira seu email.")
             else:
-                st.error("Por favor, digite um email válido.")
-    
+                try:
+                    # Gerar link de reset de senha
+                    reset_link = auth.generate_password_reset_link(email)
+                    
+                    # Enviar email com o link
+                    if send_reset_email(email, reset_link):
+                        st.success("Link de redefinição de senha enviado com sucesso! Verifique seu email.")
+                        st.info("O link é válido por 1 hora.")
+                    else:
+                        st.error("Não foi possível enviar o email. Por favor, tente novamente mais tarde.")
+                
+                except auth.UserNotFoundError:
+                    st.error("Email não encontrado. Verifique se o email está correto.")
+                except Exception as e:
+                    st.error(f"Erro ao processar a solicitação: {str(e)}")
+
     # Botão para voltar ao login
-    if st.button("⬅️ Voltar para Login", key="back_to_login_initial_reset_page"):
+    if st.button("⬅️ Voltar para Login"):
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
         st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+if __name__ == '__main__':
+    pagina_reset_password()
