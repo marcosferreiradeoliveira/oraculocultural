@@ -72,7 +72,7 @@ def pagina_perfil():
             st.success("Você saiu da sua conta.")
             st.rerun()
 
-    nome_para_exibir = user_info.get("nome", user_info.get("display_name", "Nome não disponível"))
+    nome_para_exibir = user_info.get("nome_completo", user_info.get("display_name", "Nome não disponível"))
     email_para_exibir = user_info.get('email', 'Email não disponível')
     is_premium_user = False
     data_ativacao = None
@@ -91,8 +91,8 @@ def pagina_perfil():
                 break # Pegamos o primeiro (e único esperado)
 
             if usuario_doc_data:
-                if usuario_doc_data.get('nome'): # Prioriza nome do Firestore
-                    nome_para_exibir = usuario_doc_data['nome']
+                if usuario_doc_data.get('nome_completo'): # Prioriza nome_completo do Firestore
+                    nome_para_exibir = usuario_doc_data['nome_completo']
                 
                 is_premium = usuario_doc_data.get('premium', False)
                 is_premium_user = is_premium # Atualiza a flag
@@ -146,7 +146,7 @@ def pagina_perfil():
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    nome_completo = st.text_input("Nome Completo", value=usuario_doc_data.get('nome', nome_para_exibir))
+                    nome_completo = st.text_input("Nome Completo", value=usuario_doc_data.get('nome_completo', nome_para_exibir))
                     rg = st.text_input("RG", value=usuario_doc_data.get('rg', ''))
                     orgao_emissor = st.text_input("Órgão Emissor", value=usuario_doc_data.get('orgao_emissor', ''))
                     
