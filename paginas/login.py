@@ -448,7 +448,7 @@ def pagina_login():
                 del st.session_state[key]
             st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro'
             st.session_state[AUTENTICADO_SESSION_KEY] = False
-            st.experimental_rerun()
+            st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
