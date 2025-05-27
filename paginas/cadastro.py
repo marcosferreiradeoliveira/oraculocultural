@@ -4,6 +4,68 @@ from firebase_admin import auth, firestore, credentials
 from constants import PAGINA_ATUAL_SESSION_KEY
 from services.firebase_init import initialize_firebase, get_error_message
 
+def handle_cadastro(nome_completo, email, senha, confirmar_senha, empresa):
+    """Processa o cadastro de forma otimizada"""
+    if not nome_completo or not email or not senha or not confirmar_senha:
+        st.error("Por favor, preencha todos os campos obrigatórios.")
+        return False
+    
+    if len(senha) < 6:
+        st.error("A senha deve ter pelo menos 6 caracteres.")
+        return False
+    
+    if senha != confirmar_senha:
+        st.error("As senhas não coincidem.")
+        return False
+    
+    try:
+        # 1. Criar usuário no Firebase Authentication
+        user_record = auth.create_user(
+            email=email,
+            password=senha,
+            display_name=nome_completo
+        )
+        st.toast(f"Usuário {user_record.email} autenticado com sucesso!", icon="🔑")
+
+        # 2. Preparar dados para o Firestore
+        user_data = {
+            'uid': user_record.uid,
+            'email': user_record.email,
+            'nome_completo': nome_completo,
+            'empresa': empresa if empresa else '',
+            'premium': False,
+            'data_cadastro': firestore.SERVER_TIMESTAMP,
+            'ultimo_login': firestore.SERVER_TIMESTAMP
+        }
+
+        # 3. Salvar dados no Firestore
+        db = firestore.client()
+        db.collection('usuarios').document(user_record.uid).set(user_data)
+        
+        st.toast("Seu perfil foi criado no banco de dados!", icon="📄")
+        st.success("Cadastro efetuado com sucesso! Você será redirecionado para o login.")
+        
+        # Pequeno atraso para o usuário ler as mensagens
+        import time
+        time.sleep(2)
+        
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+        return True
+
+    except auth.EmailAlreadyExistsError:
+        st.error("Este email já está cadastrado. Tente fazer login ou use um email diferente.")
+    except Exception as e:
+        st.error(f"Erro ao cadastrar: {str(e)}")
+        # Tenta remover o usuário do Auth se a criação no Firestore falhar
+        if 'user_record' in locals() and user_record:
+            try:
+                auth.delete_user(user_record.uid)
+                st.warning("Tentativa de rollback: usuário removido do sistema de autenticação devido a erro subsequente.")
+            except Exception as delete_error:
+                st.error(f"Erro adicional ao tentar remover usuário do Auth após falha: {delete_error}")
+    
+    return False
+
 def pagina_cadastro():
     """Exibe a página de cadastro com layout moderno e otimizado"""
     # Inicializa o Firebase e obtém o cliente Firestore
