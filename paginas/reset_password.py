@@ -8,12 +8,25 @@ import os
 from constants import PAGINA_ATUAL_SESSION_KEY
 from services.firebase_init import initialize_firebase, get_error_message
 
+@st.cache_resource
+def initialize_firebase_app():
+    """Inicializa o Firebase com cache para melhor performance"""
+    if not initialize_firebase():
+        st.error(get_error_message())
+        return False
+    return True
+
 def send_reset_email(email, reset_link):
     """Envia email com link de reset de senha"""
     try:
-        # Configurações do email
-        sender_email = os.getenv('GMAIL_USER')
-        sender_password = os.getenv('GMAIL_APP_PASSWORD')
+        # Configurações do email do Streamlit Secrets
+        email_config = st.secrets.get('email', {})
+        sender_email = email_config.get('user')
+        sender_password = email_config.get('password')
+        
+        if not sender_email or not sender_password:
+            st.error("Configurações de email não encontradas. Por favor, configure as credenciais de email no Streamlit Secrets.")
+            return False
         
         # Criar mensagem
         msg = MIMEMultipart()
@@ -66,6 +79,11 @@ def send_reset_email(email, reset_link):
 
 def pagina_reset_password():
     """Exibe a página de reset de senha"""
+    # Inicializa o Firebase
+    firebase_app = initialize_firebase_app()
+    if not firebase_app:
+        return
+
     st.markdown("""
     <style>
         .reset-container {
@@ -112,6 +130,11 @@ def pagina_reset_password():
                     if send_reset_email(email, reset_link):
                         st.success("Link de redefinição de senha enviado com sucesso! Verifique seu email.")
                         st.info("O link é válido por 1 hora.")
+                        # Aguarda 2 segundos antes de redirecionar
+                        import time
+                        time.sleep(2)
+                        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+                        st.rerun()
                     else:
                         st.error("Não foi possível enviar o email. Por favor, tente novamente mais tarde.")
                 
