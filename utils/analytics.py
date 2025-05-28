@@ -1,4 +1,5 @@
 import streamlit as st
+from constants import USER_SESSION_KEY
 
 def track_event(event_name, params=None):
     """
@@ -12,9 +13,10 @@ def track_event(event_name, params=None):
         params = {}
     
     # Add user information if available
-    if 'user' in st.session_state:
-        params['user_id'] = st.session_state['user'].get('uid', 'anonymous')
-        params['user_email'] = st.session_state['user'].get('email', 'anonymous')
+    if USER_SESSION_KEY in st.session_state:
+        user_info = st.session_state[USER_SESSION_KEY]
+        params['user_id'] = user_info.get('uid', 'anonymous')
+        params['user_email'] = user_info.get('email', 'anonymous')
     
     # Construct the gtag event
     script = f"""
@@ -45,9 +47,10 @@ def track_page_view(page_title, location=None, path=None):
         params['page_path'] = path
     
     # Add user information if available
-    if 'user' in st.session_state:
-        params['user_id'] = st.session_state['user'].get('uid', 'anonymous')
-        params['user_email'] = st.session_state['user'].get('email', 'anonymous')
+    if USER_SESSION_KEY in st.session_state:
+        user_info = st.session_state[USER_SESSION_KEY]
+        params['user_id'] = user_info.get('uid', 'anonymous')
+        params['user_email'] = user_info.get('email', 'anonymous')
     
     # Construct the gtag pageview
     script = f"""
