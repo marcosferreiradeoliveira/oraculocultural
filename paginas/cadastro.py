@@ -1,6 +1,7 @@
 import streamlit as st
 import firebase_admin
 from firebase_admin import auth, firestore, credentials
+import time
 from constants import PAGINA_ATUAL_SESSION_KEY, USER_SESSION_KEY, AUTENTICADO_SESSION_KEY
 from services.firebase_init import initialize_firebase, get_error_message
 from utils.analytics import track_event, track_page_view
@@ -51,7 +52,6 @@ def handle_cadastro(nome_completo, email, senha, confirmar_senha, empresa):
         st.success("Cadastro efetuado com sucesso! Você será redirecionado para o login.")
         
         # Pequeno atraso para o usuário ler as mensagens
-        import time
         time.sleep(2)
         
         # Set user data in session state
