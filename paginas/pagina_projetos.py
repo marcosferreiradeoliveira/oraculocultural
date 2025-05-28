@@ -3,6 +3,8 @@ import firebase_admin
 from firebase_admin import firestore
 import traceback
 import time
+from components import welcome_popup
+from constants import USER_SESSION_KEY
 
 def pagina_projetos():
     st.title("📋 Projetos")
@@ -10,6 +12,22 @@ def pagina_projetos():
     if not firebase_admin._apps:
         pass
     db = firestore.client()
+
+    # Get user data from session state
+    user_data = st.session_state.get(USER_SESSION_KEY)
+    if user_data and 'uid' in user_data:
+        user_id = user_data['uid']
+        
+        # Check if user has seen the welcome popup
+        user_doc = db.collection('users').document(user_id).get()
+        
+        if not user_doc.exists or not user_doc.get('has_seen_welcome'):
+            # Show welcome popup
+            welcome_popup()
+            # Mark that user has seen the welcome popup
+            db.collection('users').document(user_id).set({
+                'has_seen_welcome': True
+            }, merge=True)
 
     # Tabs para Projetos e Editais
     tab1, tab2 = st.tabs(["📝 Projetos", "📄 Editais"])
@@ -57,29 +75,10 @@ def pagina_projetos():
                         
                         # Botões de ação em uma linha separada
                         st.markdown("---")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if st.button("✏️ Editar Edital", key=f"edit_{edital.id}", use_container_width=True):
-                                st.session_state['edital_para_editar'] = edital.id
-                                st.session_state['pagina_atual'] = 'editar_edital'
-                                st.rerun()
-                        
-                        with col2:
-                            if st.button("🗑️ Excluir Edital", key=f"delete_{edital.id}", use_container_width=True):
-                                # Verifica se existem projetos associados
-                                projetos_ref = db.collection('projetos').where('edital_associado', '==', edital.id).get()
-                                if len(projetos_ref) > 0:
-                                    st.error("Não é possível excluir este edital pois existem projetos associados a ele.")
-                                else:
-                                    if st.checkbox("Confirmar exclusão", key=f"confirm_delete_{edital.id}"):
-                                        try:
-                                            db.collection('editais').document(edital.id).delete()
-                                            st.success("Edital excluído com sucesso!")
-                                            time.sleep(1)
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"Erro ao excluir edital: {str(e)}")
-                                            st.code(traceback.format_exc())
+                        if st.button("✏️ Editar Edital", key=f"edit_{edital.id}", use_container_width=True):
+                            st.session_state['edital_para_editar'] = edital.id
+                            st.session_state['pagina_atual'] = 'editar_edital'
+                            st.rerun()
         
         except Exception as e:
             st.error(f"Erro ao carregar editais: {str(e)}")
