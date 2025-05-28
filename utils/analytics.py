@@ -13,10 +13,11 @@ def track_event(event_name, params=None):
         params = {}
     
     # Add user information if available
-    if USER_SESSION_KEY in st.session_state:
+    if USER_SESSION_KEY in st.session_state and st.session_state[USER_SESSION_KEY] is not None:
         user_info = st.session_state[USER_SESSION_KEY]
-        params['user_id'] = user_info.get('uid', 'anonymous')
-        params['user_email'] = user_info.get('email', 'anonymous')
+        if isinstance(user_info, dict):
+            params['user_id'] = user_info.get('uid', 'anonymous')
+            params['user_email'] = user_info.get('email', 'anonymous')
     
     # Construct the gtag event
     script = f"""
@@ -47,10 +48,11 @@ def track_page_view(page_title, location=None, path=None):
         params['page_path'] = path
     
     # Add user information if available
-    if USER_SESSION_KEY in st.session_state:
+    if USER_SESSION_KEY in st.session_state and st.session_state[USER_SESSION_KEY] is not None:
         user_info = st.session_state[USER_SESSION_KEY]
-        params['user_id'] = user_info.get('uid', 'anonymous')
-        params['user_email'] = user_info.get('email', 'anonymous')
+        if isinstance(user_info, dict):
+            params['user_id'] = user_info.get('uid', 'anonymous')
+            params['user_email'] = user_info.get('email', 'anonymous')
     
     # Construct the gtag pageview
     script = f"""
