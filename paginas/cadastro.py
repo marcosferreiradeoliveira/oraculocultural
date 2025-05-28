@@ -69,7 +69,8 @@ def handle_cadastro(nome_completo, email, senha, confirmar_senha, empresa):
         # Track successful signup
         track_event('signup_success', {
             'signup_time': signup_time,
-            'user_email': user_record.email
+            'user_email': user_record.email,
+            'user_id': user_record.uid
         })
         
         return True
