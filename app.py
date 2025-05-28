@@ -2,10 +2,6 @@ import streamlit as st
 import datetime # Para trabalhar com datas e horas
 from google.cloud.firestore_v1 import FieldFilter # Necessário para consultas where no Firestore
 import time # Importado para usar a função sleep
-from utils.analytics import initialize_analytics
-
-# Initialize Google Analytics
-initialize_analytics()
 
 # Configuração da página Streamlit (deve ser a primeira chamada Streamlit NO SCRIPT PRINCIPAL)
 st.set_page_config(
@@ -14,7 +10,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
     menu_items={
-        # ... (menu items)
         'Get Help': None,
         'Report a bug': None,
         'About': "# Oráculo Cultural\nSua plataforma para decifrar o universo da cultura."
