@@ -4,10 +4,51 @@ from firebase_admin import firestore
 import traceback
 import time
 from components import welcome_popup
-from constants import USER_SESSION_KEY
+from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY
+from google.cloud.firestore_v1 import FieldFilter
+from services.firebase_init import initialize_firebase, get_error_message
+from utils.analytics import track_event, track_page_view
 
 def pagina_projetos():
-    st.title("📋 Projetos")
+    """Exibe a página de projetos com layout moderno e otimizado"""
+    # Track page view
+    track_page_view('Projects Page')
+    
+    # Inicializa o Firebase (com cache)
+    firebase_app = initialize_firebase_app()
+    if not firebase_app:
+        return
+
+    if not st.session_state.get(USER_SESSION_KEY):
+        st.warning("Usuário não logado.")
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+        st.rerun()
+        return
+
+    user_info = st.session_state[USER_SESSION_KEY]
+    
+    # Get user's full name from database
+    try:
+        db = firestore.client()
+        user_doc = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_info['uid'])).limit(1).get()
+        user_data = next(user_doc, None)
+        if user_data:
+            user_data = user_data.to_dict()
+            display_name = user_data.get('nome_completo', user_info.get('display_name', 'Usuário'))
+        else:
+            display_name = user_info.get('display_name', 'Usuário')
+    except Exception as e:
+        display_name = user_info.get('display_name', 'Usuário')
+
+    # Projetos Section
+    st.markdown('<div class="section-header"><h2>🎨 Meus Projetos Culturais</h2>', unsafe_allow_html=True)
+    if st.button("✨ Criar Novo Projeto", key="btn_novo_projeto", type="primary"):
+        track_event('create_project_click')
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'novo_projeto'
+        if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
+        if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if not firebase_admin._apps:
         pass

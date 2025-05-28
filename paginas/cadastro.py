@@ -1,24 +1,29 @@
 import streamlit as st
 import firebase_admin
 from firebase_admin import auth, firestore, credentials
-from constants import PAGINA_ATUAL_SESSION_KEY
+from constants import PAGINA_ATUAL_SESSION_KEY, USER_SESSION_KEY, AUTENTICADO_SESSION_KEY
 from services.firebase_init import initialize_firebase, get_error_message
+from utils.analytics import track_event, track_page_view
 
 def handle_cadastro(nome_completo, email, senha, confirmar_senha, empresa):
     """Processa o cadastro de forma otimizada"""
     if not nome_completo or not email or not senha or not confirmar_senha:
         st.error("Por favor, preencha todos os campos obrigatórios.")
+        track_event('signup_attempt', {'status': 'failed', 'reason': 'empty_fields'})
         return False
     
     if len(senha) < 6:
         st.error("A senha deve ter pelo menos 6 caracteres.")
+        track_event('signup_attempt', {'status': 'failed', 'reason': 'short_password'})
         return False
     
     if senha != confirmar_senha:
         st.error("As senhas não coincidem.")
+        track_event('signup_attempt', {'status': 'failed', 'reason': 'password_mismatch'})
         return False
     
     try:
+        start_time = time.time()
         # 1. Criar usuário no Firebase Authentication
         user_record = auth.create_user(
             email=email,
@@ -49,12 +54,31 @@ def handle_cadastro(nome_completo, email, senha, confirmar_senha, empresa):
         import time
         time.sleep(2)
         
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+        # Set user data in session state
+        st.session_state[USER_SESSION_KEY] = {
+            'email': user_record.email,
+            'uid': user_record.uid,
+            'login_time': start_time
+        }
+        st.session_state[AUTENTICADO_SESSION_KEY] = True
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
+        
+        end_time = time.time()
+        signup_time = end_time - start_time
+        
+        # Track successful signup
+        track_event('signup_success', {
+            'signup_time': signup_time,
+            'user_email': user_record.email
+        })
+        
         return True
 
     except auth.EmailAlreadyExistsError:
+        track_event('signup_attempt', {'status': 'failed', 'reason': 'email_exists'})
         st.error("Este email já está cadastrado. Tente fazer login ou use um email diferente.")
     except Exception as e:
+        track_event('signup_attempt', {'status': 'failed', 'reason': 'error', 'error_message': str(e)})
         st.error(f"Erro ao cadastrar: {str(e)}")
         # Tenta remover o usuário do Auth se a criação no Firestore falhar
         if 'user_record' in locals() and user_record:
@@ -68,6 +92,9 @@ def handle_cadastro(nome_completo, email, senha, confirmar_senha, empresa):
 
 def pagina_cadastro():
     """Exibe a página de cadastro com layout moderno e otimizado"""
+    # Track page view
+    track_page_view('Signup Page')
+    
     # Inicializa o Firebase e obtém o cliente Firestore
     try:
         if not firebase_admin._apps:

@@ -5,6 +5,11 @@ import os
 import uuid
 import firebase_admin
 from firebase_admin import firestore
+from google.cloud.firestore_v1 import FieldFilter
+import time
+from services.firebase_init import initialize_firebase, get_error_message
+from constants import AUTENTICADO_SESSION_KEY
+from utils.analytics import track_event, track_page_view
 
 # Função para obter a URL base da aplicação
 def get_base_url():
@@ -53,6 +58,20 @@ def pagina_pagamento_upgrade():
     """
     Página de Upgrade de Plano
     """
+    # Track page view
+    track_page_view('Upgrade Payment Page')
+    
+    # Inicializa o Firebase (com cache)
+    firebase_app = initialize_firebase_app()
+    if not firebase_app:
+        return
+
+    if not st.session_state.get(USER_SESSION_KEY):
+        st.warning("Usuário não logado.")
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+        st.rerun()
+        return
+
     st.title("🚀 Upgrade para o Plano Premium")
     
     # Botão de logout no topo
@@ -100,7 +119,9 @@ def pagina_pagamento_upgrade():
     )
 
     if st.button("💳 Pagar com Mercado Pago e Ativar Premium", type="primary", use_container_width=True):
+        track_event('upgrade_click')
         try:
+            start_time = time.time()
             sdk = mercadopago.SDK(mp_access_token)
             base_url = get_base_url()
             preference_id = str(uuid.uuid4())
@@ -145,10 +166,22 @@ def pagina_pagamento_upgrade():
                 st.session_state['mp_preference_id'] = preference["id"]
                 st.markdown(f'<meta http-equiv="refresh" content="3; url={init_point}">', unsafe_allow_html=True)
                 st.markdown(f"Você será redirecionado para o Mercado Pago para concluir o pagamento... [Clique aqui se não for redirecionado automaticamente]({init_point}).")
+
+                # Track successful upgrade
+                end_time = time.time()
+                processing_time = end_time - start_time
+                
+                track_event('upgrade_success', {
+                    'processing_time': processing_time,
+                    'user_email': payer_email
+                })
             else:
                 st.error("Erro ao criar preferência de pagamento")
 
         except Exception as e:
+            track_event('upgrade_failed', {
+                'error_message': str(e)
+            })
             st.error("Ocorreu um erro ao processar o pagamento")
 
     # Botão para voltar para a página de perfil
