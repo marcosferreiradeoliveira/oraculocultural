@@ -5,6 +5,7 @@ import os
 import time
 from services.firebase_init import initialize_firebase, get_error_message
 from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY # Importado de constants
+from components import welcome_popup # Import the welcome popup component
 
 @st.cache_resource
 def initialize_firebase_app():
@@ -24,6 +25,7 @@ def handle_login(email, senha):
         start_time = time.time()
         user = auth.get_user_by_email(email)
         
+        # Set user data in session state
         st.session_state[USER_SESSION_KEY] = {
             'email': user.email,
             'uid': user.uid,
@@ -31,7 +33,6 @@ def handle_login(email, senha):
         }
         st.session_state[AUTENTICADO_SESSION_KEY] = True
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos' # Destino padrão, será reavaliado em app.py
-        st.session_state['just_logged_in'] = True # Nova flag para indicar login recente
         
         end_time = time.time()
         st.toast(f"Bem-vindo, {user.email}! Login em {(end_time - start_time):.2f}s")
@@ -375,7 +376,7 @@ def pagina_login():
             <div class="login-right-panel">
                 <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24' fill='none' stroke='%237e22ce' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpath d='M12 16c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4z'%3E%3C/path%3E%3Cpath d='M12 8v-2'%3E%3C/path%3E%3Cpath d='M12 18v-2'%3E%3C/path%3E%3Cpath d='M8 12h-2'%3E%3C/path%3E%3Cpath d='M18 12h-2'%3E%3C/path%3E%3C/svg%3E" class="logo" alt="Oráculo Cultural Logo">
                 <h2>Bem-vindo ao Oráculo Cultural</h2>
-                <p class="subtitle">Aproveite de forma gratuita por 7 dias</p>
+                <p class="subtitle">Faça login ou crie sua conta</p>
             </div>
         """, unsafe_allow_html=True)
 
