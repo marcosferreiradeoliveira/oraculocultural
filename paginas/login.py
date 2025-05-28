@@ -6,6 +6,7 @@ import time
 from services.firebase_init import initialize_firebase, get_error_message
 from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY # Importado de constants
 from components import welcome_popup # Import the welcome popup component
+from utils.analytics import track_event, track_page_view
 
 @st.cache_resource
 def initialize_firebase_app():
@@ -19,6 +20,7 @@ def handle_login(email, senha):
     """Processa o login de forma otimizada"""
     if not email or not senha:
         st.error("Por favor, preencha o e-mail e a senha.")
+        track_event('login_attempt', {'status': 'failed', 'reason': 'empty_fields'})
         return False
     
     try:
@@ -35,18 +37,31 @@ def handle_login(email, senha):
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos' # Destino padrão, será reavaliado em app.py
         
         end_time = time.time()
-        st.toast(f"Bem-vindo, {user.email}! Login em {(end_time - start_time):.2f}s")
+        login_time = end_time - start_time
+        
+        # Track successful login
+        track_event('login_success', {
+            'login_time': login_time,
+            'user_email': user.email
+        })
+        
+        st.toast(f"Bem-vindo, {user.email}! Login em {login_time:.2f}s")
         return True
         
     except auth.UserNotFoundError:
+        track_event('login_attempt', {'status': 'failed', 'reason': 'user_not_found'})
         st.error("Usuário não encontrado. Verifique o e-mail.")
     except Exception as e:
+        track_event('login_attempt', {'status': 'failed', 'reason': 'error', 'error_message': str(e)})
         st.error(f"Erro no login: {str(e)}")
     
     return False
 
 def pagina_login():
     """Exibe a página de login com layout moderno e otimizado"""
+    # Track page view
+    track_page_view('Login Page')
+    
     # Inicializa o Firebase (com cache)
     firebase_app = initialize_firebase_app()
     if not firebase_app:

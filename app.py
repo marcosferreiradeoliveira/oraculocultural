@@ -18,6 +18,18 @@ st.set_page_config(
     }
 )
 
+# Implementação do Google Analytics
+st.markdown("""
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-MBKVND6RMW"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-MBKVND6RMW');
+    </script>
+""", unsafe_allow_html=True)
+
 import tempfile
 from langchain_openai import ChatOpenAI
 import os
