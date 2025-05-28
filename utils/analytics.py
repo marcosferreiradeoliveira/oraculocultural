@@ -1,6 +1,30 @@
 import streamlit as st
 from constants import USER_SESSION_KEY
 
+# Google Analytics Measurement ID
+GA_MEASUREMENT_ID = 'G-MBKVND6RMW'
+
+def initialize_analytics():
+    """
+    Initialize Google Analytics with the correct Measurement ID.
+    This should be called at the start of the app.
+    """
+    script = f"""
+    <script async src="https://www.googletagmanager.com/gtag/js?id={GA_MEASUREMENT_ID}"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){{dataLayer.push(arguments);}}
+        gtag('js', new Date());
+        gtag('config', '{GA_MEASUREMENT_ID}', {{
+            'app_name': 'Oraculo Cultural',
+            'app_version': '1.0',
+            'stream_id': '11277564575',
+            'stream_url': 'https://oraculocultural.streamlit.app/'
+        }});
+    </script>
+    """
+    st.markdown(script, unsafe_allow_html=True)
+
 def track_event(event_name, params=None):
     """
     Track an event in Google Analytics.
@@ -18,6 +42,14 @@ def track_event(event_name, params=None):
         if isinstance(user_info, dict):
             params['user_id'] = user_info.get('uid', 'anonymous')
             params['user_email'] = user_info.get('email', 'anonymous')
+    
+    # Add app information
+    params.update({
+        'app_name': 'Oraculo Cultural',
+        'app_version': '1.0',
+        'stream_id': '11277564575',
+        'stream_url': 'https://oraculocultural.streamlit.app/'
+    })
     
     # Construct the gtag event
     script = f"""
@@ -39,7 +71,11 @@ def track_page_view(page_title, location=None, path=None):
         path (str, optional): Path portion of the URL
     """
     params = {
-        'page_title': page_title
+        'page_title': page_title,
+        'app_name': 'Oraculo Cultural',
+        'app_version': '1.0',
+        'stream_id': '11277564575',
+        'stream_url': 'https://oraculocultural.streamlit.app/'
     }
     
     if location:

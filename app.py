@@ -2,7 +2,10 @@ import streamlit as st
 import datetime # Para trabalhar com datas e horas
 from google.cloud.firestore_v1 import FieldFilter # Necessário para consultas where no Firestore
 import time # Importado para usar a função sleep
+from utils.analytics import initialize_analytics
 
+# Initialize Google Analytics
+initialize_analytics()
 
 # Configuração da página Streamlit (deve ser a primeira chamada Streamlit NO SCRIPT PRINCIPAL)
 st.set_page_config(
