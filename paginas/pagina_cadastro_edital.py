@@ -5,8 +5,8 @@ import tempfile
 import os
 import traceback
 from models import get_llm
-
 from loaders import carrega_pdf
+from services.storage_service import upload_file
 
 def extrair_info_edital(texto_edital):
     """Extrai informações importantes do edital usando IA"""
@@ -16,9 +16,28 @@ def extrair_info_edital(texto_edital):
 Analise o texto do edital abaixo e extraia as seguintes informações em formato estruturado:
 
 1. Data de inscrição (ou período de inscrição)
+   - Procure por datas específicas de encerramento
+   - Se houver período, indique início e fim
+   - Formate como DD/MM/YYYY ou período DD/MM/YYYY a DD/MM/YYYY
+
 2. Categorias de projetos aceitas
-3. Textos que precisam ser enviados (como objetivo, justificativa, etc)
-4. Documentos que devem ser enviados (como anexos, declarações, etc)
+   - Liste todas as categorias mencionadas
+   - Inclua subcategorias se houver
+   - Mantenha a hierarquia original
+
+3. Textos que precisam ser enviados
+   - Objetivo do projeto
+   - Justificativa
+   - Metodologia
+   - Cronograma
+   - Orçamento
+   - Outros textos específicos mencionados
+
+4. Documentos que devem ser enviados
+   - Cartas de anuência
+   - Declarações
+   - Comprovantes
+   - Outros documentos específicos
 
 Formate a resposta assim:
 [DATA_INSCRICAO]
@@ -202,6 +221,21 @@ def pagina_cadastro_edital():
         nome_edital = st.text_input("Nome do Edital*", help="Nome de identificação do edital (ex: Edital Cultural Vale 2025)")
         arquivo_edital_pdf = st.file_uploader("Arquivo do Edital (PDF)*", type=["pdf"], help="Carregue o PDF oficial completo do edital.")
         arquivo_selecionados_pdf = st.file_uploader("Estudo de Projetos Selecionados (PDF)", type=["pdf"], help="Carregue um PDF com análises de projetos selecionados em editais anteriores (opcional)." )
+        
+        # Seção para upload de modelos de documentos
+        st.subheader("📄 Modelos de Documentos")
+        st.write("Faça upload dos modelos de documentos mencionados no edital (opcional)")
+        
+        # Campos para upload de modelos de documentos
+        modelos_documentos = {}
+        for doc_type in ["Carta de Anuência", "Orçamento"]:
+            uploaded_file = st.file_uploader(
+                f"Modelo de {doc_type}", 
+                type=["pdf", "doc", "docx", "xlsx"], 
+                help=f"Carregue o modelo de {doc_type} mencionado no edital"
+            )
+            if uploaded_file:
+                modelos_documentos[doc_type] = uploaded_file
 
         submitted = st.form_submit_button("💾 Salvar Edital")
 
@@ -262,8 +296,37 @@ def pagina_cadastro_edital():
                          else:
                             st.warning("Não foi possível extrair texto do PDF de projetos selecionados.")
 
-                    # Salva os dados no Firestore
+                    # Salva os dados no Firestore primeiro para obter o ID do edital
                     doc_ref = db.collection('editais').add(edital_data)
+                    edital_id = doc_ref[1].id
+
+                    # Processa e salva os modelos de documentos
+                    if modelos_documentos:
+                        edital_data['modelos_documentos'] = {}
+                        for doc_type, uploaded_file in modelos_documentos.items():
+                            if uploaded_file:
+                                # Define o caminho no storage
+                                storage_path = f"editais/{edital_id}/modelos/{uploaded_file.name}"
+                                
+                                # Faz upload do arquivo
+                                upload_result = upload_file(
+                                    file_data=uploaded_file.getvalue(),
+                                    destination_path=storage_path,
+                                    content_type=uploaded_file.type
+                                )
+                                
+                                # Adiciona informações do arquivo ao edital
+                                edital_data['modelos_documentos'][doc_type] = {
+                                    'nome_arquivo': uploaded_file.name,
+                                    'tipo_arquivo': uploaded_file.type,
+                                    'tamanho': uploaded_file.size,
+                                    'url': upload_result['url'],
+                                    'storage_path': upload_result['path']
+                                }
+                        
+                        # Atualiza o documento com as informações dos modelos
+                        doc_ref[1].update(edital_data)
+
                     st.success(f"Edital '{nome_edital}' cadastrado com sucesso!")
                     
                     # Mostra as informações extraídas

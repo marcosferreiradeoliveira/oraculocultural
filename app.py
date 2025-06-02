@@ -16,15 +16,134 @@ st.set_page_config(
     }
 )
 
-# Implementação do Google Analytics
+# Implementação do Google Tag Manager
 st.markdown("""
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-MBKVND6RMW"></script>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-MSGBFJ8D');</script>
+    <!-- End Google Tag Manager -->
+
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MSGBFJ8D"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
+
     <script>
+        // Configuração inicial do dataLayer
         window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-MBKVND6RMW');
+        
+        // Função de debug para GTM
+        function debugGTM() {
+            console.log('=== Google Tag Manager Debug ===');
+            console.log('dataLayer:', window.dataLayer);
+            console.log('Current URL:', window.location.href);
+            console.log('Is Localhost:', window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        }
+
+        // Cookie Consent Banner
+        function createCookieConsentBanner() {
+            const banner = document.createElement('div');
+            banner.style.cssText = `
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 1rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                z-index: 1000;
+            `;
+            
+            banner.innerHTML = `
+                <div style="flex-grow: 1; margin-right: 1rem;">
+                    Utilizamos cookies para melhorar sua experiência. Ao continuar navegando, você concorda com nossa política de cookies.
+                </div>
+                <div>
+                    <button onclick="acceptCookies()" style="
+                        background: #C02679;
+                        color: white;
+                        border: none;
+                        padding: 0.5rem 1rem;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        margin-right: 0.5rem;
+                    ">Aceitar</button>
+                    <button onclick="rejectCookies()" style="
+                        background: transparent;
+                        color: white;
+                        border: 1px solid white;
+                        padding: 0.5rem 1rem;
+                        border-radius: 4px;
+                        cursor: pointer;
+                    ">Recusar</button>
+                </div>
+            `;
+            
+            document.body.appendChild(banner);
+        }
+        
+        function acceptCookies() {
+            localStorage.setItem('cookieConsent', 'accepted');
+            document.querySelector('div[style*="position: fixed"]').remove();
+            // Enviar evento de consentimento
+            dataLayer.push({
+                'event': 'cookie_consent',
+                'consent_status': 'accepted'
+            });
+            debugGTM();
+        }
+        
+        function rejectCookies() {
+            localStorage.setItem('cookieConsent', 'rejected');
+            document.querySelector('div[style*="position: fixed"]').remove();
+            // Enviar evento de rejeição
+            dataLayer.push({
+                'event': 'cookie_consent',
+                'consent_status': 'rejected'
+            });
+        }
+        
+        // Verificar consentimento de cookies
+        if (!localStorage.getItem('cookieConsent')) {
+            createCookieConsentBanner();
+        }
+        
+        // Inicializar após carregar a página
+        window.addEventListener('load', function() {
+            debugGTM();
+            
+            // Enviar evento de carregamento da página
+            dataLayer.push({
+                'event': 'page_view',
+                'page_path': window.location.pathname,
+                'page_location': window.location.href,
+                'page_title': document.title
+            });
+            
+            // Monitorar mudanças de URL
+            let lastUrl = location.href;
+            new MutationObserver(() => {
+                const url = location.href;
+                if (url !== lastUrl) {
+                    lastUrl = url;
+                    if (localStorage.getItem('cookieConsent') === 'accepted') {
+                        dataLayer.push({
+                            'event': 'page_view',
+                            'page_path': url,
+                            'page_location': url,
+                            'page_title': document.title
+                        });
+                        debugGTM();
+                    }
+                }
+            }).observe(document, {subtree: true, childList: true});
+        });
     </script>
 """, unsafe_allow_html=True)
 
@@ -688,9 +807,8 @@ def pagina_projetos():
                     <div class="project-card"> <!-- Using project-card class for similar styling -->
                         <div class="project-card-content">
                             <h3>📄 {edital.get('nome', 'Edital sem nome')}</h3>
-                            <p style="color: #64748b; font-size: 0.95rem; margin-bottom: 0.75rem; line-height: 1.5;">{edital.get('descricao', 'Sem descrição')}</p>
                             <p style="font-size: 0.9rem; color: #334155; margin: 0;"><strong>Data de Inscrição:</strong> {edital.get('data_inscricao', 'Não definida')}</p>
-                            <p style="font-size: 0.9rem; color: #334155; margin: 0.2rem 0;"><strong>Categorias de Projetos:</strong> {', '.join(edital.get('categorias_projetos', [])) if edital.get('categorias_projetos') else 'Não definidas'}</p>
+                            <p style="font-size: 0.9rem; color: #334155; margin: 0.2rem 0;"><strong>Categorias de Projetos:</strong> {', '.join(edital.get('categorias', [])) if edital.get('categorias') else 'Não definidas'}</p>
                             <p style="font-size: 0.9rem; color: #334155; margin: 0.2rem 0;"><strong>Textos Requeridos:</strong> {', '.join(edital.get('textos_requeridos', [])) if edital.get('textos_requeridos') else 'Não definidos'}</p>
                             <p style="font-size: 0.9rem; color: #334155; margin: 0.2rem 0;"><strong>Documentos Requeridos:</strong> {', '.join(edital.get('documentos_requeridos', [])) if edital.get('documentos_requeridos') else 'Não definidos'}</p>
                         </div>
@@ -807,8 +925,14 @@ def pagina_novo_projeto():
                     db.collection('projetos').add(novo_projeto_data)
                     st.success(f"Projeto '{nome}' criado com sucesso!")
                     st.balloons()
-                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
-                    # Clear form inputs and related session state if any
+                    
+                    # Get the newly created project ID
+                    projetos_ref = db.collection('projetos').where(filter=FieldFilter('user_id', '==', user_uid)).order_by('data_criacao', direction=firestore.Query.DESCENDING).limit(1)
+                    novo_projeto = next(projetos_ref.stream())
+                    
+                    # Set the project in session state and redirect to edit page
+                    st.session_state[PROJETO_SELECIONADO_KEY] = {'id': novo_projeto.id, **novo_projeto.to_dict()}
+                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar projeto: {str(e)}")
