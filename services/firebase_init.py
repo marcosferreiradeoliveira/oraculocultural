@@ -115,6 +115,24 @@ def validate_credentials(creds_dict):
 
     return True, None
 
+def get_storage_bucket():
+    """Obtém o nome do bucket do Storage do Firebase"""
+    # Bucket padrão para o projeto
+    DEFAULT_BUCKET = "culturalapp-fb9b0.firebasestorage.app"
+    
+    # Tenta obter do arquivo de credenciais
+    creds_dict, _ = get_firebase_credentials()
+    if creds_dict and 'project_id' in creds_dict:
+        return DEFAULT_BUCKET
+    
+    # Tenta obter do st.secrets
+    if hasattr(st, 'secrets'):
+        if "firebase" in st.secrets and "storage_bucket" in st.secrets.firebase:
+            return st.secrets.firebase.storage_bucket
+    
+    # Retorna o bucket padrão se nada mais for encontrado
+    return DEFAULT_BUCKET
+
 def initialize_firebase():
     """Inicializa o Firebase Admin SDK com as credenciais apropriadas"""
     global _initialized, _error_message
@@ -137,18 +155,19 @@ def initialize_firebase():
             logger.error(f"Erro ao obter credenciais: {error}")
             return False
 
-        # Valida o dicionário de credenciais
-        logger.info("Validando credenciais...")
-        is_valid, error = validate_credentials(creds_dict)
-        if not is_valid:
-            _error_message = error
-            logger.error(f"Erro na validação das credenciais: {error}")
+        # Obtém o nome do bucket
+        storage_bucket = get_storage_bucket()
+        if not storage_bucket:
+            _error_message = "Nome do bucket do Storage não encontrado"
+            logger.error(_error_message)
             return False
 
-        # Inicializa o Firebase
+        # Inicializa o Firebase com as configurações do Storage
         logger.info("Inicializando Firebase Admin SDK...")
         cred = credentials.Certificate(creds_dict)
-        firebase_admin.initialize_app(cred)
+        firebase_admin.initialize_app(cred, {
+            'storageBucket': storage_bucket
+        })
         _initialized = True
         logger.info("Firebase Admin SDK inicializado com sucesso")
         return True
