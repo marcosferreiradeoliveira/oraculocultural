@@ -16,31 +16,44 @@ st.set_page_config(
     }
 )
 
-# Implementação do Google Tag Manager
+# Implementação do Google Analytics 4
 st.markdown("""
-    <!-- Google Tag Manager -->
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-MSGBFJ8D');</script>
-    <!-- End Google Tag Manager -->
-
-    <!-- Google Tag Manager (noscript) -->
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MSGBFJ8D"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <!-- End Google Tag Manager (noscript) -->
-
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Z5YJBVKP9B"></script>
     <script>
-        // Configuração inicial do dataLayer
         window.dataLayer = window.dataLayer || [];
-        
-        // Função de debug para GTM
-        function debugGTM() {
-            console.log('=== Google Tag Manager Debug ===');
-            console.log('dataLayer:', window.dataLayer);
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-Z5YJBVKP9B', {
+            'app_name': 'Oráculo Cultural',
+            'app_version': '1.0.0',
+            'page_location': window.location.href,
+            'page_path': window.location.pathname,
+            'page_title': document.title,
+            'send_page_view': true,
+            'debug_mode': true
+        });
+
+        // Função de debug para GA4
+        function debugGA4() {
+            console.log('=== Google Analytics 4 Debug ===');
             console.log('Current URL:', window.location.href);
             console.log('Is Localhost:', window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+            console.log('Port:', window.location.port);
+            console.log('GA4 Initialized:', typeof gtag === 'function');
+        }
+
+        // Função para enviar eventos
+        function sendGA4Event(eventName, eventParams = {}) {
+            gtag('event', eventName, {
+                ...eventParams,
+                'timestamp': new Date().toISOString(),
+                'page_url': window.location.href,
+                'page_path': window.location.pathname,
+                'page_title': document.title,
+                'app_name': 'Oráculo Cultural'
+            });
+            console.log('GA4 Event sent:', eventName, eventParams);
         }
 
         // Cookie Consent Banner
@@ -91,21 +104,19 @@ st.markdown("""
         function acceptCookies() {
             localStorage.setItem('cookieConsent', 'accepted');
             document.querySelector('div[style*="position: fixed"]').remove();
-            // Enviar evento de consentimento
-            dataLayer.push({
-                'event': 'cookie_consent',
-                'consent_status': 'accepted'
+            sendGA4Event('cookie_consent', {
+                'consent_status': 'accepted',
+                'consent_timestamp': new Date().toISOString()
             });
-            debugGTM();
+            debugGA4();
         }
         
         function rejectCookies() {
             localStorage.setItem('cookieConsent', 'rejected');
             document.querySelector('div[style*="position: fixed"]').remove();
-            // Enviar evento de rejeição
-            dataLayer.push({
-                'event': 'cookie_consent',
-                'consent_status': 'rejected'
+            sendGA4Event('cookie_consent', {
+                'consent_status': 'rejected',
+                'consent_timestamp': new Date().toISOString()
             });
         }
         
@@ -116,14 +127,13 @@ st.markdown("""
         
         // Inicializar após carregar a página
         window.addEventListener('load', function() {
-            debugGTM();
+            debugGA4();
             
             // Enviar evento de carregamento da página
-            dataLayer.push({
-                'event': 'page_view',
-                'page_path': window.location.pathname,
-                'page_location': window.location.href,
-                'page_title': document.title
+            sendGA4Event('page_view', {
+                'page_type': 'streamlit',
+                'app_name': 'Oráculo Cultural',
+                'streamlit_version': '1.38.0'
             });
             
             // Monitorar mudanças de URL
@@ -133,17 +143,34 @@ st.markdown("""
                 if (url !== lastUrl) {
                     lastUrl = url;
                     if (localStorage.getItem('cookieConsent') === 'accepted') {
-                        dataLayer.push({
-                            'event': 'page_view',
-                            'page_path': url,
-                            'page_location': url,
-                            'page_title': document.title
+                        sendGA4Event('page_view', {
+                            'page_type': 'streamlit',
+                            'app_name': 'Oráculo Cultural',
+                            'streamlit_version': '1.38.0'
                         });
-                        debugGTM();
+                        debugGA4();
                     }
                 }
             }).observe(document, {subtree: true, childList: true});
         });
+
+        // Enviar evento de teste a cada 30 segundos
+        setInterval(() => {
+            if (localStorage.getItem('cookieConsent') === 'accepted') {
+                sendGA4Event('heartbeat', {
+                    'page_type': 'streamlit',
+                    'app_name': 'Oráculo Cultural'
+                });
+            }
+        }, 30000);
+
+        // Enviar evento de teste inicial
+        setTimeout(() => {
+            sendGA4Event('test_event', {
+                'test_type': 'initialization',
+                'test_timestamp': new Date().toISOString()
+            });
+        }, 2000);
     </script>
 """, unsafe_allow_html=True)
 
@@ -960,7 +987,7 @@ def main():
     if USER_SESSION_KEY not in st.session_state:
         st.session_state[USER_SESSION_KEY] = None
     if PAGINA_ATUAL_SESSION_KEY not in st.session_state:
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro'
 
     # Inicializa o estado para forçar visualização do perfil (para teste expirado)
     if 'forced_profile_view' not in st.session_state:
