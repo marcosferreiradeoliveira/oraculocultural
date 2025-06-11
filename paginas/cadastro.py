@@ -291,6 +291,72 @@ def pagina_cadastro():
             .login-right-panel { border-radius: 2rem 2rem 0 0; padding-top: 3rem; }
             .stats-grid { grid-template-columns: repeat(1, 1fr); }
         }
+        .video-container {
+            flex: 0 0 auto;
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 2rem auto 0;
+            padding-bottom: 56.25%;
+        }
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Adicionar CSS para o rodapé */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: white;
+            padding: 1rem 0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+            font-family: 'Poppins', sans-serif;
+        }
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 2rem;
+        }
+        .footer-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .footer-logo {
+            height: 30px;
+            width: auto;
+        }
+        .footer-right {
+            display: flex;
+            gap: 2rem;
+        }
+        .footer-link {
+            color: #64748b;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.2s ease;
+        }
+        .footer-link:hover {
+            color: #7e22ce;
+        }
+        .footer-copyright {
+            color: #64748b;
+            font-size: 0.875rem;
+        }
+
+        /* Ajustar o padding do conteúdo principal para não sobrepor o rodapé */
+        .login-left-panel, .login-right-panel {
+            padding-bottom: 5rem !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -320,6 +386,14 @@ def pagina_cadastro():
                             <div class="stat-label">Geração de documentos customizada</div>
                         </div>
                     </div>
+                </div>
+                <div class="video-container">
+                    <iframe 
+                        src="https://www.youtube.com/embed/3CIJYnVlJO8"
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen>
+                    </iframe>
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -402,3 +476,25 @@ def pagina_cadastro():
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # Adicionar o rodapé
+    st.markdown("""
+    <div class="footer">
+        <div class="footer-content">
+            <div class="footer-left">
+                <a href="https://www.mobcontent.com.br" target="_blank" style="text-decoration: none; display: flex; align-items: center; gap: 1rem;">
+                    <img src="https://mobcontent.com.br/wp-content/uploads/2021/04/cropped-cropped-favicon-mobcontent-2-1.png" alt="MobContent Logo" class="footer-logo">
+                    <span class="footer-copyright">Um produto MobContent</span>
+                </a>
+                <span class="footer-copyright" style="margin-left: 1rem;">•</span>
+                <span class="footer-copyright">Todos os direitos reservados</span>
+            </div>
+            <div class="footer-right">
+                <a href="#" class="footer-link">Política de privacidade</a>
+                <a href="#" class="footer-link">Contato</a>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    return
