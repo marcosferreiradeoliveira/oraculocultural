@@ -96,7 +96,7 @@ def pagina_cadastro():
     # Track page view
     track_page_view('Signup Page')
     
-    # Implementação do Google Analytics 4
+    # Implementação do Google Analytics 4 - VERSÃO CORRIGIDA
     st.markdown("""
         <!-- Google tag (gtag.js) -->
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-Z5YJBVKP9B"></script>
@@ -104,153 +104,158 @@ def pagina_cadastro():
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
+            
+            // Configuração inicial do GA4
             gtag('config', 'G-Z5YJBVKP9B', {
-                'app_name': 'Oráculo Cultural',
-                'app_version': '1.0.0',
-                'page_location': window.location.href,
-                'page_path': window.location.pathname,
-                'page_title': document.title,
-                'send_page_view': true,
-                'debug_mode': true
+                'send_page_view': false  // Desabilita page_view automático para controle manual
             });
 
-            // Função de debug para GA4
-            function debugGA4() {
-                console.log('=== Google Analytics 4 Debug ===');
-                console.log('Current URL:', window.location.href);
-                console.log('Is Localhost:', window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-                console.log('Port:', window.location.port);
-                console.log('GA4 Initialized:', typeof gtag === 'function');
+            // Função para enviar page view manualmente
+            function sendPageView(page_title = document.title, page_location = window.location.href) {
+                gtag('event', 'page_view', {
+                    'page_title': page_title,
+                    'page_location': page_location,
+                    'custom_parameter': 'streamlit_app'
+                });
+                console.log('GA4 Page View sent:', page_title, page_location);
             }
 
-            // Função para enviar eventos
+            // Função para enviar eventos customizados
             function sendGA4Event(eventName, eventParams = {}) {
                 gtag('event', eventName, {
                     ...eventParams,
                     'timestamp': new Date().toISOString(),
-                    'page_url': window.location.href,
-                    'page_path': window.location.pathname,
-                    'page_title': document.title,
-                    'app_name': 'Oráculo Cultural'
+                    'page_url': window.location.href
                 });
                 console.log('GA4 Event sent:', eventName, eventParams);
             }
 
-            // Cookie Consent Banner
-            function createCookieConsentBanner() {
-                const banner = document.createElement('div');
-                banner.style.cssText = `
-                    position: fixed;
-                    bottom: 0;
-                    left: 0;
-                    right: 0;
-                    background: rgba(0, 0, 0, 0.8);
-                    color: white;
-                    padding: 1rem;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    z-index: 1000;
-                `;
-                
-                banner.innerHTML = `
-                    <div style="flex-grow: 1; margin-right: 1rem;">
-                        Utilizamos cookies para melhorar sua experiência. Ao continuar navegando, você concorda com nossa política de cookies.
-                    </div>
-                    <div>
-                        <button onclick="acceptCookies()" style="
-                            background: #C02679;
-                            color: white;
-                            border: none;
-                            padding: 0.5rem 1rem;
-                            border-radius: 4px;
-                            cursor: pointer;
-                            margin-right: 0.5rem;
-                        ">Aceitar</button>
-                        <button onclick="rejectCookies()" style="
-                            background: transparent;
-                            color: white;
-                            border: 1px solid white;
-                            padding: 0.5rem 1rem;
-                            border-radius: 4px;
-                            cursor: pointer;
-                        ">Recusar</button>
-                    </div>
-                `;
-                
-                document.body.appendChild(banner);
+            // Cookie Consent Banner (simplificado)
+            function showCookieConsent() {
+                if (localStorage.getItem('ga_consent') !== 'granted') {
+                    const banner = document.createElement('div');
+                    banner.id = 'cookie-banner';
+                    banner.style.cssText = `
+                        position: fixed;
+                        bottom: 0;
+                        left: 0;
+                        right: 0;
+                        background: rgba(0, 0, 0, 0.9);
+                        color: white;
+                        padding: 1rem;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        z-index: 9999;
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    `;
+                    
+                    banner.innerHTML = `
+                        <div style="flex-grow: 1; margin-right: 1rem;">
+                            Este site usa cookies para análises. Aceita o uso de cookies?
+                        </div>
+                        <div>
+                            <button onclick="acceptCookies()" style="
+                                background: #C02679;
+                                color: white;
+                                border: none;
+                                padding: 0.5rem 1rem;
+                                border-radius: 4px;
+                                cursor: pointer;
+                                margin-right: 0.5rem;
+                            ">Aceitar</button>
+                            <button onclick="rejectCookies()" style="
+                                background: transparent;
+                                color: white;
+                                border: 1px solid white;
+                                padding: 0.5rem 1rem;
+                                border-radius: 4px;
+                                cursor: pointer;
+                            ">Recusar</button>
+                        </div>
+                    `;
+                    
+                    document.body.appendChild(banner);
+                }
             }
             
             function acceptCookies() {
-                localStorage.setItem('cookieConsent', 'accepted');
-                document.querySelector('div[style*="position: fixed"]').remove();
-                sendGA4Event('cookie_consent', {
-                    'consent_status': 'accepted',
-                    'consent_timestamp': new Date().toISOString()
+                localStorage.setItem('ga_consent', 'granted');
+                document.getElementById('cookie-banner')?.remove();
+                
+                // Configura consentimento e envia page view
+                gtag('consent', 'update', {
+                    'analytics_storage': 'granted'
                 });
-                debugGA4();
+                
+                sendPageView('Oráculo Cultural - ' + document.title);
+                sendGA4Event('cookie_consent_granted');
             }
             
             function rejectCookies() {
-                localStorage.setItem('cookieConsent', 'rejected');
-                document.querySelector('div[style*="position: fixed"]').remove();
-                sendGA4Event('cookie_consent', {
-                    'consent_status': 'rejected',
-                    'consent_timestamp': new Date().toISOString()
-                });
-            }
-            
-            // Verificar consentimento de cookies
-            if (!localStorage.getItem('cookieConsent')) {
-                createCookieConsentBanner();
-            }
-            
-            // Inicializar após carregar a página
-            window.addEventListener('load', function() {
-                debugGA4();
+                localStorage.setItem('ga_consent', 'denied');
+                document.getElementById('cookie-banner')?.remove();
                 
-                // Enviar evento de carregamento da página
-                sendGA4Event('page_view', {
-                    'page_type': 'streamlit',
-                    'app_name': 'Oráculo Cultural',
-                    'streamlit_version': '1.38.0'
+                gtag('consent', 'update', {
+                    'analytics_storage': 'denied'
                 });
                 
-                // Monitorar mudanças de URL
-                let lastUrl = location.href;
-                new MutationObserver(() => {
-                    const url = location.href;
-                    if (url !== lastUrl) {
-                        lastUrl = url;
-                        if (localStorage.getItem('cookieConsent') === 'accepted') {
-                            sendGA4Event('page_view', {
-                                'page_type': 'streamlit',
-                                'app_name': 'Oráculo Cultural',
-                                'streamlit_version': '1.38.0'
-                            });
-                            debugGA4();
-                        }
-                    }
-                }).observe(document, {subtree: true, childList: true});
+                sendGA4Event('cookie_consent_denied');
+            }
+            
+            // Inicialização quando a página carrega
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('GA4 Debug: Page loaded');
+                console.log('GA4 Debug: URL:', window.location.href);
+                console.log('GA4 Debug: gtag function available:', typeof gtag === 'function');
+                
+                // Configurar consentimento inicial
+                gtag('consent', 'default', {
+                    'analytics_storage': 'denied'
+                });
+                
+                // Verificar consentimento
+                const consent = localStorage.getItem('ga_consent');
+                if (consent === 'granted') {
+                    gtag('consent', 'update', {
+                        'analytics_storage': 'granted'
+                    });
+                    sendPageView('Oráculo Cultural - ' + document.title);
+                } else if (consent !== 'denied') {
+                    showCookieConsent();
+                }
             });
 
-            // Enviar evento de teste a cada 30 segundos
-            setInterval(() => {
-                if (localStorage.getItem('cookieConsent') === 'accepted') {
-                    sendGA4Event('heartbeat', {
-                        'page_type': 'streamlit',
-                        'app_name': 'Oráculo Cultural'
+            // Detectar mudanças na aplicação Streamlit
+            let currentUrl = window.location.href;
+            let pageChangeObserver = new MutationObserver(function(mutations) {
+                if (window.location.href !== currentUrl) {
+                    currentUrl = window.location.href;
+                    
+                    // Enviar page view apenas se consentimento foi dado
+                    if (localStorage.getItem('ga_consent') === 'granted') {
+                        setTimeout(() => {
+                            sendPageView('Oráculo Cultural - ' + document.title);
+                        }, 100);
+                    }
+                }
+            });
+
+            // Observar mudanças no DOM (necessário para SPAs como Streamlit)
+            pageChangeObserver.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+            // Teste de conectividade (opcional)
+            setTimeout(() => {
+                if (localStorage.getItem('ga_consent') === 'granted') {
+                    sendGA4Event('ga4_test_event', {
+                        'test_parameter': 'initialization_complete'
                     });
                 }
-            }, 30000);
+            }, 3000);
 
-            // Enviar evento de teste inicial
-            setTimeout(() => {
-                sendGA4Event('test_event', {
-                    'test_type': 'initialization',
-                    'test_timestamp': new Date().toISOString()
-                });
-            }, 2000);
         </script>
     """, unsafe_allow_html=True)
 
