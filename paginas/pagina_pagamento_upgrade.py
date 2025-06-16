@@ -10,49 +10,23 @@ import time
 from services.firebase_init import initialize_firebase, get_error_message
 from constants import AUTENTICADO_SESSION_KEY
 from utils.analytics import track_event, track_page_view
+from services.env_manager import get_env_value
 
 # Função para obter a URL base da aplicação
 def get_base_url():
-    if hasattr(st, 'secrets'):
-        if "mercadopago" in st.secrets and "STREAMLIT_BASE_URL" in st.secrets.mercadopago:
-            base_url_from_secrets = st.secrets.mercadopago.get("STREAMLIT_BASE_URL")
-            if base_url_from_secrets:
-                return base_url_from_secrets.rstrip('/')
+    base_url = get_env_value("mercadopago.STREAMLIT_BASE_URL")
+    if base_url:
+        return base_url.rstrip('/')
     return os.getenv("STREAMLIT_BASE_URL", "https://oraculocultural.streamlit.app").rstrip('/')
 
 def get_mercadopago_credentials():
     """
-    Obtém as credenciais do Mercado Pago, priorizando:
-    1. Variáveis de ambiente (.env)
-    2. st.secrets
+    Obtém as credenciais do Mercado Pago do ambiente Railway
     """
-    credentials = {
-        'access_token': None,
-        'public_key': None
+    return {
+        'access_token': get_env_value("mercadopago.access_token"),
+        'public_key': get_env_value("mercadopago.public_key")
     }
-    
-    # Primeiro tenta carregar do .env
-    if os.path.exists(".env"):
-        from dotenv import load_dotenv
-        load_dotenv()
-        credentials['access_token'] = os.getenv("MP_ACCESS_TOKEN")
-        credentials['public_key'] = os.getenv("MP_PUBLIC_KEY")
-    
-    # Se não encontrou no .env, tenta do st.secrets
-    if not credentials['access_token'] and hasattr(st, 'secrets'):
-        try:
-            if "mercadopago" in st.secrets:
-                mercadopago_content = st.secrets.mercadopago
-                if hasattr(mercadopago_content, 'to_dict'):
-                    mercadopago_content = mercadopago_content.to_dict()
-                
-                if isinstance(mercadopago_content, dict):
-                    credentials['access_token'] = mercadopago_content.get('access_token')
-                    credentials['public_key'] = mercadopago_content.get('public_key')
-        except Exception as e:
-            st.error("Erro ao carregar credenciais do Mercado Pago")
-    
-    return credentials
 
 def pagina_pagamento_upgrade():
     """

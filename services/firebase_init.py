@@ -1,10 +1,9 @@
 import firebase_admin
 from firebase_admin import credentials
 import logging
-import streamlit as st
 import json
 import os
-from streamlit.runtime.secrets import AttrDict
+from services.env_manager import get_env_value
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,7 +13,7 @@ _initialized = False
 _error_message = None
 
 def get_firebase_credentials():
-    """Extrai e valida as credenciais do Firebase do st.secrets ou arquivo local"""
+    """Extrai e valida as credenciais do Firebase do ambiente Railway ou arquivo local"""
     # Primeiro tenta arquivo local (ambiente de desenvolvimento)
     # Tenta diferentes caminhos possíveis para o arquivo de credenciais
     possible_paths = [
@@ -36,51 +35,19 @@ def get_firebase_credentials():
                 logger.error(f"Erro ao ler arquivo de credenciais local: {str(e)}")
                 continue
 
-    # Se não encontrou arquivo local, tenta st.secrets (ambiente de produção)
+    # Se não encontrou arquivo local, tenta do ambiente Railway
     try:
-        if hasattr(st, 'secrets') and "firebase_credentials" in st.secrets:
-            raw_creds = st.secrets["firebase_credentials"]
-            logger.info("Usando credenciais do st.secrets (ambiente de produção)")
-            
-            # Tenta converter para dicionário se for AttrDict
-            if isinstance(raw_creds, AttrDict):
-                try:
-                    creds_dict = {
-                        'type': str(raw_creds.type),
-                        'project_id': str(raw_creds.project_id),
-                        'private_key_id': str(raw_creds.private_key_id),
-                        'private_key': str(raw_creds.private_key),
-                        'client_email': str(raw_creds.client_email),
-                        'client_id': str(raw_creds.client_id),
-                        'auth_uri': str(raw_creds.auth_uri),
-                        'token_uri': str(raw_creds.token_uri),
-                        'auth_provider_x509_cert_url': str(raw_creds.auth_provider_x509_cert_url),
-                        'client_x509_cert_url': str(raw_creds.client_x509_cert_url),
-                        'universe_domain': str(raw_creds.universe_domain)
-                    }
-                    return creds_dict, None
-                except Exception as e:
-                    return None, f"Erro ao converter AttrDict para dicionário: {str(e)}"
-
-            # Se já for dicionário, valida
-            if isinstance(raw_creds, dict):
-                return raw_creds, None
-
-            # Se for string, tenta converter de JSON
-            if isinstance(raw_creds, str):
-                try:
-                    creds_dict = json.loads(raw_creds)
-                    return creds_dict, None
-                except json.JSONDecodeError:
-                    return None, "Credenciais em formato string não são um JSON válido"
+        creds_dict = get_env_value("firebase_credentials")
+        if creds_dict:
+            logger.info("Usando credenciais do ambiente Railway")
+            return creds_dict, None
     except Exception as e:
-        # Ignora erros de st.secrets em ambiente local
-        logger.info("st.secrets não disponível (ambiente local)")
+        logger.error(f"Erro ao ler credenciais do ambiente Railway: {str(e)}")
 
     return None, (
         "Nenhuma credencial do Firebase encontrada. "
         "Para desenvolvimento local, coloque o arquivo 'firebase-service-account.json' em 'config/'. "
-        "Para produção, configure as credenciais no Streamlit Cloud."
+        "Para produção, configure as credenciais no Railway."
     )
 
 def validate_credentials(creds_dict):
@@ -125,56 +92,33 @@ def get_storage_bucket():
     if creds_dict and 'project_id' in creds_dict:
         return DEFAULT_BUCKET
     
-    # Tenta obter do st.secrets
-    if hasattr(st, 'secrets'):
-        if "firebase" in st.secrets and "storage_bucket" in st.secrets.firebase:
-            return st.secrets.firebase.storage_bucket
-    
     # Retorna o bucket padrão se nada mais for encontrado
     return DEFAULT_BUCKET
 
 def initialize_firebase():
-    """Inicializa o Firebase Admin SDK com as credenciais apropriadas"""
+    """Inicializa o Firebase Admin SDK"""
     global _initialized, _error_message
-
+    
     if _initialized:
-        logger.info("Firebase já inicializado")
         return True
-
+        
     try:
-        if firebase_admin._apps:
-            _initialized = True
-            logger.info("Firebase já inicializado (firebase_admin._apps existe)")
-            return True
-
-        # Obtém e valida as credenciais
-        logger.info("Tentando obter credenciais do Firebase...")
         creds_dict, error = get_firebase_credentials()
         if error:
             _error_message = error
-            logger.error(f"Erro ao obter credenciais: {error}")
             return False
-
-        # Obtém o nome do bucket
-        storage_bucket = get_storage_bucket()
-        if not storage_bucket:
-            _error_message = "Nome do bucket do Storage não encontrado"
-            logger.error(_error_message)
+            
+        if not creds_dict:
+            _error_message = "Credenciais do Firebase não encontradas"
             return False
-
-        # Inicializa o Firebase com as configurações do Storage
-        logger.info("Inicializando Firebase Admin SDK...")
+            
+        # Inicializa o Firebase Admin SDK
         cred = credentials.Certificate(creds_dict)
-        firebase_admin.initialize_app(cred, {
-            'storageBucket': storage_bucket
-        })
+        firebase_admin.initialize_app(cred)
         _initialized = True
-        logger.info("Firebase Admin SDK inicializado com sucesso")
         return True
-
     except Exception as e:
         _error_message = f"Erro ao inicializar Firebase: {str(e)}"
-        logger.error(_error_message)
         return False
 
 def get_error_message():

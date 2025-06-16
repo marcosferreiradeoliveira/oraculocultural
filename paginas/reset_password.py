@@ -7,6 +7,7 @@ from email.mime.multipart import MIMEMultipart
 import os
 from constants import PAGINA_ATUAL_SESSION_KEY
 from services.firebase_init import initialize_firebase, get_error_message
+from services.env_manager import get_env_value
 
 @st.cache_resource
 def initialize_firebase_app():
@@ -19,13 +20,12 @@ def initialize_firebase_app():
 def send_reset_email(email, reset_link):
     """Envia email com link de reset de senha"""
     try:
-        # Configurações do email do Streamlit Secrets
-        email_config = st.secrets.get('email', {})
-        sender_email = email_config.get('user')
-        sender_password = email_config.get('password')
+        # Configurações do email do ambiente Railway
+        sender_email = get_env_value("email.user")
+        sender_password = get_env_value("email.password")
         
         if not sender_email or not sender_password:
-            st.error("Configurações de email não encontradas. Por favor, configure as credenciais de email no Streamlit Secrets.")
+            st.error("Configurações de email não encontradas. Por favor, configure as credenciais de email no Railway.")
             return False
         
         # Criar mensagem
@@ -44,18 +44,11 @@ def send_reset_email(email, reset_link):
                     <p>Recebemos uma solicitação para redefinir sua senha no Oráculo Cultural.</p>
                     <p>Clique no botão abaixo para criar uma nova senha:</p>
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="{reset_link}" 
-                           style="background-color: #7e22ce; color: white; padding: 12px 24px; 
-                                  text-decoration: none; border-radius: 5px; display: inline-block;">
-                            Redefinir Senha
-                        </a>
+                        <a href="{reset_link}" style="background-color: #7e22ce; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Redefinir Senha</a>
                     </div>
                     <p>Se você não solicitou esta redefinição, por favor ignore este email.</p>
                     <p>Este link é válido por 1 hora.</p>
-                    <hr style="border: 1px solid #eee; margin: 20px 0;">
-                    <p style="color: #666; font-size: 12px;">
-                        Este é um email automático, por favor não responda.
-                    </p>
+                    <p>Atenciosamente,<br>Equipe Oráculo Cultural</p>
                 </div>
             </body>
         </html>
@@ -63,7 +56,7 @@ def send_reset_email(email, reset_link):
         
         msg.attach(MIMEText(body, 'html'))
         
-        # Conectar ao servidor SMTP do Gmail
+        # Configurar servidor SMTP
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender_email, sender_password)
