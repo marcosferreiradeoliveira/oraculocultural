@@ -26,10 +26,15 @@ def get_llm(
         Instância do ChatOpenAI configurada
     """
     try:
+        print("DEBUG models.py: Attempting to get OpenAI API key...")
         openai_api_key = get_env_value("openai.api_key")
+        print(f"DEBUG models.py: API key retrieved: {'Found' if openai_api_key else 'Not found'}")
+        
         if not openai_api_key:
+            print("DEBUG models.py: API key is empty or None")
             raise ValueError("OpenAI API key não encontrada")
             
+        print("DEBUG models.py: Initializing ChatOpenAI...")
         return ChatOpenAI(
             model=model,
             temperature=temperature,
@@ -38,6 +43,7 @@ def get_llm(
             streaming=True
         )
     except Exception as e:
+        print(f"DEBUG models.py: Error in get_llm: {str(e)}")
         st.error(f"Erro ao inicializar LLM: {str(e)}")
         raise
 
