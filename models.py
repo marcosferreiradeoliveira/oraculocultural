@@ -6,6 +6,7 @@ import streamlit as st
 from typing import Optional, Dict, Any
 import os
 from dotenv import load_dotenv
+from services.env_manager import get_env_value
 
 # Configuração centralizada do LLM
 @st.cache_resource
@@ -25,14 +26,7 @@ def get_llm(
         Instância do ChatOpenAI configurada
     """
     try:
-        # Tenta carregar do .env primeiro (desenvolvimento local)
-        if os.path.exists('.env'):
-            load_dotenv()
-            openai_api_key = os.getenv("OPENAI_API_KEY")
-        else:
-            # Se não encontrar .env, usa os secrets do Streamlit (produção)
-            openai_api_key = st.secrets["openai"]["api_key"]
-            
+        openai_api_key = get_env_value("openai.api_key")
         if not openai_api_key:
             raise ValueError("OpenAI API key não encontrada")
             
