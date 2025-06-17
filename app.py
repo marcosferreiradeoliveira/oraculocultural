@@ -2,6 +2,7 @@ import streamlit as st
 import os
 from services.env_manager import get_env_value
 from dotenv import load_dotenv # Importar load_dotenv
+from firebase_admin import firestore # Adicionar importação do firestore
 
 # Carregar variáveis de ambiente do arquivo .env (para desenvolvimento local)
 load_dotenv()

@@ -1,5 +1,5 @@
 import firebase_admin
-from firebase_admin import credentials
+from firebase_admin import credentials, firestore
 import logging
 import json
 import os
@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 _initialized = False
 _error_message = None
+_db = None
 
 def get_firebase_credentials():
     """Extrai e valida as credenciais do Firebase do ambiente Railway ou arquivo local"""
@@ -97,7 +98,7 @@ def get_storage_bucket():
 
 def initialize_firebase():
     """Inicializa o Firebase Admin SDK"""
-    global _initialized, _error_message
+    global _initialized, _error_message, _db
     
     if _initialized:
         return True
@@ -115,11 +116,30 @@ def initialize_firebase():
         # Inicializa o Firebase Admin SDK
         cred = credentials.Certificate(creds_dict)
         firebase_admin.initialize_app(cred)
+        
+        # Inicializa o cliente Firestore
+        _db = firestore.client()
+        
         _initialized = True
+        logger.info("Firebase Admin SDK e Firestore inicializados com sucesso")
         return True
     except Exception as e:
         _error_message = f"Erro ao inicializar Firebase: {str(e)}"
+        logger.error(_error_message)
         return False
+
+def get_firestore_client():
+    """Retorna o cliente Firestore inicializado"""
+    global _db
+    
+    if not _initialized:
+        if not initialize_firebase():
+            raise RuntimeError(f"Falha ao inicializar Firebase: {_error_message}")
+    
+    if not _db:
+        _db = firestore.client()
+    
+    return _db
 
 def get_error_message():
     """Retorna a mensagem de erro da última tentativa de inicialização"""

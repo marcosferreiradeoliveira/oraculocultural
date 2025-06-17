@@ -1,6 +1,6 @@
 from firebase_admin import firestore
 from datetime import datetime
-from .firebase_init import initialize_firebase
+from .firebase_init import initialize_firebase, get_firestore_client
 import logging
 
 # Configuração de logging
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 try:
     if not initialize_firebase():
         raise RuntimeError("Falha ao inicializar Firebase")
-    db = firestore.client()
+    db = get_firestore_client()
     logger.info("Firestore client inicializado com sucesso")
 except Exception as e:
     logger.error(f"Erro ao inicializar Firestore: {str(e)}")
