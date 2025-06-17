@@ -1,663 +1,115 @@
 import streamlit as st
 import firebase_admin
 from firebase_admin import auth, firestore, credentials
+from datetime import datetime
 import time
 from constants import PAGINA_ATUAL_SESSION_KEY, USER_SESSION_KEY, AUTENTICADO_SESSION_KEY
 from services.firebase_init import initialize_firebase, get_error_message
-from utils.analytics import track_event, track_page_view
-
-def handle_cadastro(nome_completo, email, senha, confirmar_senha, empresa):
-    """Processa o cadastro de forma otimizada"""
-    if not nome_completo or not email or not senha or not confirmar_senha:
-        st.error("Por favor, preencha todos os campos obrigatórios.")
-        track_event('signup_attempt', {'status': 'failed', 'reason': 'empty_fields'})
-        return False
-    
-    if len(senha) < 6:
-        st.error("A senha deve ter pelo menos 6 caracteres.")
-        track_event('signup_attempt', {'status': 'failed', 'reason': 'short_password'})
-        return False
-    
-    if senha != confirmar_senha:
-        st.error("As senhas não coincidem.")
-        track_event('signup_attempt', {'status': 'failed', 'reason': 'password_mismatch'})
-        return False
-    
-    try:
-        start_time = time.time()
-        # 1. Criar usuário no Firebase Authentication
-        user_record = auth.create_user(
-            email=email,
-            password=senha,
-            display_name=nome_completo
-        )
-        st.toast(f"Usuário {user_record.email} autenticado com sucesso!", icon="🔑")
-
-        # 2. Preparar dados para o Firestore
-        user_data = {
-            'uid': user_record.uid,
-            'email': user_record.email,
-            'nome_completo': nome_completo,
-            'empresa': empresa if empresa else '',
-            'premium': False,
-            'data_cadastro': firestore.SERVER_TIMESTAMP,
-            'ultimo_login': firestore.SERVER_TIMESTAMP
-        }
-
-        # 3. Salvar dados no Firestore
-        db = firestore.client()
-        db.collection('usuarios').document(user_record.uid).set(user_data)
-        
-        st.toast("Seu perfil foi criado no banco de dados!", icon="📄")
-        st.success("Cadastro efetuado com sucesso! Você será redirecionado para o login.")
-        
-        # Pequeno atraso para o usuário ler as mensagens
-        time.sleep(2)
-        
-        # Set user data in session state
-        st.session_state[USER_SESSION_KEY] = {
-            'email': user_record.email,
-            'uid': user_record.uid,
-            'login_time': start_time
-        }
-        st.session_state[AUTENTICADO_SESSION_KEY] = True
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
-        
-        end_time = time.time()
-        signup_time = end_time - start_time
-        
-        # Track successful signup
-        track_event('signup_success', {
-            'signup_time': signup_time,
-            'user_email': user_record.email,
-            'user_id': user_record.uid
-        })
-        
-        return True
-
-    except auth.EmailAlreadyExistsError:
-        track_event('signup_attempt', {'status': 'failed', 'reason': 'email_exists'})
-        st.error("Este email já está cadastrado. Tente fazer login ou use um email diferente.")
-    except Exception as e:
-        track_event('signup_attempt', {'status': 'failed', 'reason': 'error', 'error_message': str(e)})
-        st.error(f"Erro ao cadastrar: {str(e)}")
-        # Tenta remover o usuário do Auth se a criação no Firestore falhar
-        if 'user_record' in locals() and user_record:
-            try:
-                auth.delete_user(user_record.uid)
-                st.warning("Tentativa de rollback: usuário removido do sistema de autenticação devido a erro subsequente.")
-            except Exception as delete_error:
-                st.error(f"Erro adicional ao tentar remover usuário do Auth após falha: {delete_error}")
-    
-    return False
 
 def pagina_cadastro():
-    """Exibe a página de cadastro com layout moderno e otimizado"""
-    # Track page view
-    track_page_view('Signup Page')
-    
-    # Implementação do Google Analytics 4 - VERSÃO CORRIGIDA
-    st.markdown("""
-        <!-- Google tag (gtag.js) -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-Z5YJBVKP9B"></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            
-            // Configuração inicial do GA4
-            gtag('config', 'G-Z5YJBVKP9B', {
-                'send_page_view': false  // Desabilita page_view automático para controle manual
-            });
+    """
+    Página de Cadastro de Usuário
+    """
+    # Inicializa o Firebase (com cache)
+    firebase_app = initialize_firebase_app()
+    if not firebase_app:
+        return
 
-            // Função para enviar page view manualmente
-            function sendPageView(page_title = document.title, page_location = window.location.href) {
-                gtag('event', 'page_view', {
-                    'page_title': page_title,
-                    'page_location': page_location,
-                    'custom_parameter': 'streamlit_app'
-                });
-                console.log('GA4 Page View sent:', page_title, page_location);
-            }
+    st.title("📝 Cadastro")
 
-            // Função para enviar eventos customizados
-            function sendGA4Event(eventName, eventParams = {}) {
-                gtag('event', eventName, {
-                    ...eventParams,
-                    'timestamp': new Date().toISOString(),
-                    'page_url': window.location.href
-                });
-                console.log('GA4 Event sent:', eventName, eventParams);
-            }
+    # Botão de voltar para login
+    if st.button("← Voltar para Login"):
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
+        st.rerun()
 
-            // Cookie Consent Banner (simplificado)
-            function showCookieConsent() {
-                if (localStorage.getItem('ga_consent') !== 'granted') {
-                    const banner = document.createElement('div');
-                    banner.id = 'cookie-banner';
-                    banner.style.cssText = `
-                        position: fixed;
-                        bottom: 0;
-                        left: 0;
-                        right: 0;
-                        background: rgba(0, 0, 0, 0.9);
-                        color: white;
-                        padding: 1rem;
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        z-index: 9999;
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                    `;
-                    
-                    banner.innerHTML = `
-                        <div style="flex-grow: 1; margin-right: 1rem;">
-                            Este site usa cookies para análises. Aceita o uso de cookies?
-                        </div>
-                        <div>
-                            <button onclick="acceptCookies()" style="
-                                background: #C02679;
-                                color: white;
-                                border: none;
-                                padding: 0.5rem 1rem;
-                                border-radius: 4px;
-                                cursor: pointer;
-                                margin-right: 0.5rem;
-                            ">Aceitar</button>
-                            <button onclick="rejectCookies()" style="
-                                background: transparent;
-                                color: white;
-                                border: 1px solid white;
-                                padding: 0.5rem 1rem;
-                                border-radius: 4px;
-                                cursor: pointer;
-                            ">Recusar</button>
-                        </div>
-                    `;
-                    
-                    document.body.appendChild(banner);
+    # Formulário de cadastro
+    with st.form("cadastro_form"):
+        email = st.text_input("Email")
+        senha = st.text_input("Senha", type="password")
+        confirmar_senha = st.text_input("Confirmar Senha", type="password")
+        nome_completo = st.text_input("Nome Completo")
+        data_nascimento = st.date_input("Data de Nascimento")
+        cpf = st.text_input("CPF")
+        telefone = st.text_input("Telefone")
+        cep = st.text_input("CEP")
+        endereco = st.text_input("Endereço")
+        numero = st.text_input("Número")
+        complemento = st.text_input("Complemento")
+        bairro = st.text_input("Bairro")
+        cidade = st.text_input("Cidade")
+        estado = st.text_input("Estado")
+        pais = st.text_input("País")
+
+        submitted = st.form_submit_button("Cadastrar")
+
+        if submitted:
+            if senha != confirmar_senha:
+                st.error("As senhas não coincidem")
+                return
+
+            try:
+                # 1. Criar usuário no Firebase Auth
+                user = auth.create_user(
+                    email=email,
+                    password=senha,
+                    display_name=nome_completo
+                )
+
+                # 2. Preparar dados para o Firestore
+                user_data = {
+                    'uid': user.uid,
+                    'email': email,
+                    'nome_completo': nome_completo,
+                    'data_nascimento': data_nascimento.isoformat(),
+                    'cpf': cpf,
+                    'telefone': telefone,
+                    'endereco': {
+                        'cep': cep,
+                        'logradouro': endereco,
+                        'numero': numero,
+                        'complemento': complemento,
+                        'bairro': bairro,
+                        'cidade': cidade,
+                        'estado': estado,
+                        'pais': pais
+                    },
+                    'data_cadastro': firestore.SERVER_TIMESTAMP,
+                    'ultimo_login': firestore.SERVER_TIMESTAMP
                 }
-            }
-            
-            function acceptCookies() {
-                localStorage.setItem('ga_consent', 'granted');
-                document.getElementById('cookie-banner')?.remove();
-                
-                // Configura consentimento e envia page view
-                gtag('consent', 'update', {
-                    'analytics_storage': 'granted'
-                });
-                
-                sendPageView('Oráculo Cultural - ' + document.title);
-                sendGA4Event('cookie_consent_granted');
-            }
-            
-            function rejectCookies() {
-                localStorage.setItem('ga_consent', 'denied');
-                document.getElementById('cookie-banner')?.remove();
-                
-                gtag('consent', 'update', {
-                    'analytics_storage': 'denied'
-                });
-                
-                sendGA4Event('cookie_consent_denied');
-            }
-            
-            // Inicialização quando a página carrega
-            document.addEventListener('DOMContentLoaded', function() {
-                console.log('GA4 Debug: Page loaded');
-                console.log('GA4 Debug: URL:', window.location.href);
-                console.log('GA4 Debug: gtag function available:', typeof gtag === 'function');
-                
-                // Configurar consentimento inicial
-                gtag('consent', 'default', {
-                    'analytics_storage': 'denied'
-                });
-                
-                // Verificar consentimento
-                const consent = localStorage.getItem('ga_consent');
-                if (consent === 'granted') {
-                    gtag('consent', 'update', {
-                        'analytics_storage': 'granted'
-                    });
-                    sendPageView('Oráculo Cultural - ' + document.title);
-                } else if (consent !== 'denied') {
-                    showCookieConsent();
+
+                # 3. Salvar dados no Firestore
+                db = firestore.client()
+                db.collection('usuarios').document(user.uid).set(user_data)
+
+                # 4. Atualizar session state
+                st.session_state[USER_SESSION_KEY] = {
+                    'uid': user.uid,
+                    'email': email,
+                    'display_name': nome_completo
                 }
-            });
+                st.session_state[AUTENTICADO_SESSION_KEY] = True
+                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
 
-            // Detectar mudanças na aplicação Streamlit
-            let currentUrl = window.location.href;
-            let pageChangeObserver = new MutationObserver(function(mutations) {
-                if (window.location.href !== currentUrl) {
-                    currentUrl = window.location.href;
-                    
-                    // Enviar page view apenas se consentimento foi dado
-                    if (localStorage.getItem('ga_consent') === 'granted') {
-                        setTimeout(() => {
-                            sendPageView('Oráculo Cultural - ' + document.title);
-                        }, 100);
-                    }
-                }
-            });
+                st.success("Cadastro realizado com sucesso!")
+                st.rerun()
 
-            // Observar mudanças no DOM (necessário para SPAs como Streamlit)
-            pageChangeObserver.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
+            except auth.EmailAlreadyExistsError:
+                st.error("Este email já está cadastrado")
+            except Exception as e:
+                st.error(f"Erro ao cadastrar: {str(e)}")
+                # Tenta remover o usuário do Auth se a criação no Firestore falhar
+                try:
+                    if 'user' in locals():
+                        auth.delete_user(user.uid)
+                except:
+                    pass
 
-            // Teste de conectividade (opcional)
-            setTimeout(() => {
-                if (localStorage.getItem('ga_consent') === 'granted') {
-                    sendGA4Event('ga4_test_event', {
-                        'test_parameter': 'initialization_complete'
-                    });
-                }
-            }, 3000);
-
-        </script>
-    """, unsafe_allow_html=True)
-
-    # Inicializa o Firebase e obtém o cliente Firestore
+def initialize_firebase_app():
+    """Inicializa o Firebase Admin SDK"""
     try:
         if not firebase_admin._apps:
-            if not initialize_firebase():
-                st.error(get_error_message())
-                return
-        db = firestore.client()
+            firebase_admin.initialize_app()
+        return True
     except Exception as e:
-        if "already initialized" not in str(e).lower(): # Ignora erro de já inicializado
-            st.error(f"Falha ao inicializar Firebase Admin (necessário para Firestore): {e}")
-            print(f"Erro de inicialização Firebase em pagina_cadastro: {e}")
-            return
-        try:
-            db = firestore.client()
-        except Exception as e:
-            st.error(f"Erro ao obter cliente Firestore: {e}")
-            return
-
-    # CSS Styles
-    st.markdown("""
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        html, body {
-            padding: 0 !important;
-            margin: 0 !important;
-            height: 100% !important;
-            overflow: hidden !important;
-            background: linear-gradient(120deg, #e9d5ff, #f3e8ff, #faf5ff) !important;
-            font-family: 'Poppins', sans-serif;
-        }
-
-        .stApp > header { display: none !important; }
-        section.main.main { 
-            padding-top: 0 !important; margin-top: 0 !important; 
-            background-color: transparent !important;
-        }
-        .stApp section.main.main > div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="block-container"]:first-child {
-            padding: 0 !important; margin: 0 !important;
-            height: 100vh !important;
-            background: linear-gradient(120deg, #e9d5ff, #f3e8ff, #faf5ff) !important;
-            display: flex !important;
-            flex-direction: row !important;
-        }
-        .login-left-panel {
-            background: linear-gradient(120deg, #e9d5ff, #f3e8ff, #faf5ff) !important;
-            display: flex; flex-direction: column; justify-content: center;
-            padding: 2rem 3rem; color: #1e293b; height: 100%;
-        }
-        .login-left-panel h1 { 
-            font-family: 'Playfair Display', serif;
-            font-size: 3.5rem; 
-            font-weight: 700; 
-            margin-bottom: 1.5rem; 
-            color: #1e293b; 
-        }
-        .login-left-panel .subtitle { 
-            font-family: 'Playfair Display', serif;
-            font-size: 1.5rem; 
-            font-weight: 500; 
-            margin-bottom: 1.5rem; 
-            color: #334155; 
-        }
-        .login-left-panel .description { 
-            font-size: 1.125rem; 
-            color: #475569; 
-            margin-bottom: 3rem; 
-            line-height: 1.7; 
-        }
-        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 2rem; }
-        .stat-card {
-            background-color: white; border-radius: 1rem; padding: 1.5rem 1rem; text-align: center;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-            display: flex; align-items: center; gap: 1rem;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            font-family: 'Poppins', sans-serif;
-        }
-        .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 8px -1px rgba(0,0,0,0.15), 0 3px 6px -1px rgba(0,0,0,0.1);
-        }
-        .stat-icon {
-            font-size: 1.5rem;
-            color: #7e22ce;
-            flex-shrink: 0;
-        }
-        .stat-label { 
-            font-size: 1rem; 
-            color: #334155;
-            font-weight: 500;
-            text-align: left;
-            flex-grow: 1;
-            font-family: 'Poppins', sans-serif;
-        }
-        .login-right-panel {
-            background-color: white !important;
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-            padding: 2rem !important;
-            box-shadow: -10px 0 15px -3px rgba(0,0,0,0.1) !important;
-            height: 100%; border-radius: 2rem !important;
-            text-align: center !important;
-        }
-        .login-right-panel > *:first-child {
-            margin-top: 0 !important;
-        }
-        .login-right-panel img {
-            margin: 0 auto 2rem auto !important;
-            background: transparent !important;
-            display: block !important;
-        }
-        .login-right-panel div[data-testid="stImage"] {
-            margin: 0 auto 2rem auto !important;
-            padding: 0 !important;
-            display: block !important;
-        }
-        .login-right-panel .logo { 
-            margin: 0 auto 2rem auto !important; 
-            width: 80px; 
-            height: 80px; 
-            display: block !important;
-        }
-        .login-right-panel h2 { 
-            font-family: 'Playfair Display', serif;
-            font-size: 2rem; 
-            font-weight: 700; 
-            color: #1e293b; 
-            margin: 0 auto 0.5rem auto !important; 
-            text-align: center !important; 
-        }
-        .login-right-panel .subtitle { 
-            font-size: 1rem; 
-            color: #64748b; 
-            margin: 0 auto 2.5rem auto !important; 
-            text-align: center !important; 
-        }
-        .login-form {
-            width: 100% !important;
-            max-width: 400px !important;
-            margin: 0 auto !important;
-        }
-        .login-form .field-label { font-size: 0.9rem; font-weight: 500; color: #334155; margin-bottom: 0.5rem; }
-        .stButton button {
-            font-family: 'Poppins', sans-serif;
-            background-color: #7e22ce !important; 
-            color: white !important;
-            width: 100% !important; 
-            border-radius: 0.5rem !important;
-            padding: 0.75rem 1rem !important; 
-            font-weight: 600 !important;
-        }
-        .stButton button:hover { 
-            background-color: #6b21a8 !important; 
-        }
-        .signup-link { 
-            margin-top: 2rem; 
-            text-align: center; 
-            font-size: 0.875rem; 
-            color: #475569; 
-        }
-        .signup-link a { 
-            color: #7e22ce; 
-            text-decoration: none; 
-            font-weight: 500; 
-        }
-        .signup-link a:hover { 
-            text-decoration: underline; 
-        }
-        
-        div.signup-link div[data-testid="stButton"] button {
-            font-family: 'Poppins', sans-serif;
-            background-color: white !important;
-            color: #7e22ce !important;
-            border: 1px solid #7e22ce !important;
-            padding: 0.5rem 1rem !important;
-            font-size: 0.875rem !important;
-            font-weight: normal !important;
-            text-decoration: none !important;
-            width: auto !important;
-            display: inline !important;
-            box-shadow: none !important;
-            line-height: inherit !important;
-        }
-
-        div.signup-link div[data-testid="stButton"] button:hover {
-            background-color: #f3e8ff !important;
-            text-decoration: underline !important;
-        }
-        
-        @media (max-width: 992px) {
-            .login-master-container { flex-direction: column; height: auto; }
-            .login-left-panel { padding: 2rem; }
-            .login-left-panel h1 { font-size: 2.5rem; }
-            .login-right-panel { border-radius: 2rem 2rem 0 0; padding-top: 3rem; }
-            .stats-grid { grid-template-columns: repeat(1, 1fr); }
-        }
-        .video-container {
-            flex: 0 0 auto;
-            position: relative;
-            width: 100%;
-            max-width: 800px;
-            margin: 2rem auto 0;
-            padding-bottom: 56.25%;
-        }
-        .video-container iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-
-        /* Adicionar CSS para o rodapé */
-        .footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background-color: white;
-            padding: 1rem 0;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
-            font-family: 'Poppins', sans-serif;
-        }
-        .footer-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 2rem;
-        }
-        .footer-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        .footer-logo {
-            height: 30px;
-            width: auto;
-        }
-        .footer-right {
-            display: flex;
-            gap: 2rem;
-        }
-        .footer-link {
-            color: #64748b;
-            text-decoration: none;
-            font-size: 0.875rem;
-            transition: color 0.2s ease;
-        }
-        .footer-link:hover {
-            color: #7e22ce;
-        }
-        .footer-copyright {
-            color: #64748b;
-            font-size: 0.875rem;
-        }
-
-        /* Ajustar o padding do conteúdo principal para não sobrepor o rodapé */
-        .login-left-panel, .login-right-panel {
-            padding-bottom: 5rem !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Layout Principal
-    st.markdown('<div class="login-master-container">', unsafe_allow_html=True)
-    
-    col_esquerda, col_direita = st.columns([0.55, 0.45])
-
-    with col_esquerda:
-        st.markdown("""
-            <div class="login-left-panel">
-                <div class="login-content">
-                    <h1>Oráculo Cultural</h1>
-                    <p class="subtitle">Sua plataforma para decifrar o universo da cultura</p>
-                    <p class="description">Descubra, conecte-se e explore o mundo cultural através de uma experiência única e personalizada.</p>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-icon">🔍</div>
-                            <div class="stat-label">Diagnóstico do seu projeto</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon">📊</div>
-                            <div class="stat-label">Comparação com últimos selecionados</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon">📝</div>
-                            <div class="stat-label">Geração de documentos customizada</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="video-container">
-                    <iframe 
-                        src="https://www.youtube.com/embed/3CIJYnVlJO8"
-                        frameborder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowfullscreen>
-                    </iframe>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-
-    with col_direita:
-        st.markdown("""
-            <div class="login-right-panel">
-                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24' fill='none' stroke='%237e22ce' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpath d='M12 16c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4z'%3E%3C/path%3E%3Cpath d='M12 8v-2'%3E%3C/path%3E%3Cpath d='M12 18v-2'%3E%3C/path%3E%3Cpath d='M8 12h-2'%3E%3C/path%3E%3Cpath d='M18 12h-2'%3E%3C/path%3E%3C/svg%3E" class="logo" alt="Oráculo Cultural Logo">
-                <h2>Cadastre-se</h2>
-                <p class="subtitle">Preencha os campos abaixo para criar sua conta</p>
-            </div>
-        """, unsafe_allow_html=True)
-
-        # Formulário de cadastro
-        with st.form("cadastro_form_main", clear_on_submit=False):
-            st.markdown('<p class="field-label">Nome Completo</p>', unsafe_allow_html=True)
-            nome_completo = st.text_input("Nome Completo", placeholder="Seu nome completo", key="cadastro_nome", label_visibility="collapsed")
-            
-            st.markdown('<p class="field-label">E-mail</p>', unsafe_allow_html=True)
-            email = st.text_input("Email", placeholder="seu@email.com", key="cadastro_email", label_visibility="collapsed")
-            
-            st.markdown('<p class="field-label">Senha</p>', unsafe_allow_html=True)
-            senha = st.text_input("Senha", type="password", placeholder="••••••••", key="cadastro_senha", label_visibility="collapsed")
-            
-            st.markdown('<p class="field-label">Confirme sua Senha</p>', unsafe_allow_html=True)
-            confirmar_senha = st.text_input("Confirme sua Senha", type="password", placeholder="••••••••", key="cadastro_confirmar_senha", label_visibility="collapsed")
-            
-            st.markdown('<p class="field-label">Nome da Empresa (Opcional)</p>', unsafe_allow_html=True)
-            empresa = st.text_input("Nome da Empresa", placeholder="Nome da sua empresa", key="cadastro_empresa", label_visibility="collapsed")
-            
-            st.markdown("""
-            <style>
-                div[data-testid="stForm"] button[type="submit"] {
-                    background-color: #7e22ce !important;
-                    color: white !important;
-                    border: none !important;
-                    width: 100% !important;
-                    padding: 0.75rem 1rem !important;
-                    font-weight: 600 !important;
-                    font-family: 'Poppins', sans-serif !important;
-                }
-                div[data-testid="stForm"] button[type="submit"]:hover {
-                    background-color: #6b21a8 !important;
-                }
-                div[data-testid="stForm"] button[type="submit"]:focus {
-                    background-color: #7e22ce !important;
-                    box-shadow: none !important;
-                }
-                div[data-testid="stForm"] button[type="submit"]:active {
-                    background-color: #6b21a8 !important;
-                }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            cadastro_submit = st.form_submit_button("Criar Conta", use_container_width=True)
-            
-            if cadastro_submit:
-                with st.spinner("Criando sua conta..."):
-                    if handle_cadastro(nome_completo, email, senha, confirmar_senha, empresa):
-                        st.rerun()
-
-        # Link para voltar ao login
-        st.markdown("""
-        <style>
-            div[data-testid="stButton"] button[kind="secondary"] {
-                background-color: white !important;
-                color: #7e22ce !important;
-                border: 1px solid #7e22ce !important;
-            }
-            div[data-testid="stButton"] button[kind="secondary"]:hover {
-                background-color: #f3e8ff !important;
-            }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        st.markdown('<div class="signup-link">', unsafe_allow_html=True)
-        if st.button("Já tem uma conta? Faça login", key="login_button", type="secondary", use_container_width=True):
-            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'login'
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Adicionar o rodapé
-    st.markdown("""
-    <div class="footer">
-        <div class="footer-content">
-            <div class="footer-left">
-                <a href="https://www.mobcontent.com.br" target="_blank" style="text-decoration: none; display: flex; align-items: center; gap: 1rem;">
-                    <img src="https://mobcontent.com.br/wp-content/uploads/2021/04/cropped-cropped-favicon-mobcontent-2-1.png" alt="MobContent Logo" class="footer-logo">
-                    <span class="footer-copyright">Um produto MobContent</span>
-                </a>
-                <span class="footer-copyright" style="margin-left: 1rem;">•</span>
-                <span class="footer-copyright">Todos os direitos reservados</span>
-            </div>
-            <div class="footer-right">
-                <a href="#" class="footer-link">Política de privacidade</a>
-                <a href="#" class="footer-link">Contato</a>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    return
+        st.error(f"Erro ao inicializar Firebase: {str(e)}")
+        return False

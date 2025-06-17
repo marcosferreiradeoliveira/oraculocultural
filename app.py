@@ -3,6 +3,8 @@ import os
 from services.env_manager import get_env_value
 from dotenv import load_dotenv # Importar load_dotenv
 from firebase_admin import firestore # Adicionar importação do firestore
+import json # Importado para tentar carregar JSON de string
+import datetime # Para trabalhar com datas e horas
 
 # Carregar variáveis de ambiente do arquivo .env (para desenvolvimento local)
 load_dotenv()
@@ -20,6 +22,73 @@ st.set_page_config(
     }
 )
 
+# Função para log de analytics
+def log_analytics_event(event_name, event_params=None):
+    """Log analytics events for debugging"""
+    print(f"🔍 Analytics Event: {event_name}")
+    if event_params:
+        print(f"📊 Event Params: {event_params}")
+    
+    # Adiciona o evento ao console do navegador
+    st.components.v1.html(f"""
+    <script>
+        console.log('Analytics Event:', '{event_name}', {json.dumps(event_params or {})});
+        if (typeof gtag === 'function') {{
+            gtag('event', '{event_name}', {json.dumps(event_params or {})});
+            console.log('Event sent to GA4');
+        }} else {{
+            console.error('gtag not available');
+        }}
+    </script>
+    """, height=0)
+
+# Google Analytics
+st.markdown("""
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-Z5YJBVKP9B"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-Z5YJBVKP9B', {
+    'page_path': window.location.pathname,
+    'page_location': window.location.href,
+    'page_title': document.title,
+    'send_page_view': true,
+    'debug_mode': true
+  });
+
+  // Forçar envio de pageview
+  gtag('event', 'page_view', {
+    'page_title': document.title,
+    'page_location': window.location.href,
+    'page_path': window.location.pathname
+  });
+
+  // Log de inicialização
+  console.log('Google Analytics initialized');
+</script>
+""", unsafe_allow_html=True)
+
+# Adicionar um componente HTML personalizado para garantir que o script seja executado
+st.components.v1.html("""
+<script>
+  // Verificar se o gtag foi carregado corretamente
+  if (typeof gtag === 'function') {
+    console.log('Google Analytics carregado com sucesso');
+  } else {
+    console.error('Erro ao carregar Google Analytics');
+  }
+</script>
+""", height=0)
+
+# Log inicial de pageview
+log_analytics_event('app_loaded', {
+    'page_title': st.session_state.get('page_title', 'Oráculo Cultural'),
+    'timestamp': datetime.datetime.now().isoformat()
+})
+
 # As importações necessárias devem vir após a configuração da página
 from langchain_openai import ChatOpenAI
 import datetime # Para trabalhar com datas e horas
@@ -28,7 +97,6 @@ import time # Importado para usar a função sleep
 import firebase_admin # Importar firebase_admin
 from google.cloud.firestore_v1 import FieldFilter # FieldFilter is correctly imported
 from google.api_core.datetime_helpers import DatetimeWithNanoseconds as GCloudTimestamp # More specific import for Timestamp
-import json # Importado para tentar carregar JSON de string
 from streamlit.runtime.secrets import AttrDict # Import AttrDict para verificação de tipo
 import traceback # Importado para stack traces detalhados
 from services.firebase_init import initialize_firebase, get_error_message
@@ -425,6 +493,12 @@ def get_user_projects(user_id):
         return []
 
 def pagina_projetos():
+    """Página principal de projetos"""
+    log_analytics_event('view_projects_page', {
+        'user_id': st.session_state.get(USER_SESSION_KEY, {}).get('uid'),
+        'timestamp': datetime.datetime.now().isoformat()
+    })
+    
     print(f"DEBUG pagina_projetos: Verificando Firebase. Initialized={FIREBASE_APP_INITIALIZED}")
     if not FIREBASE_APP_INITIALIZED:
         st.error("ALERTA: A conexão com o banco de dados (Firebase) falhou. Funcionalidades limitadas.")
@@ -721,6 +795,12 @@ def pagina_projetos():
                 st.rerun()
 
 def pagina_novo_projeto():
+    """Página de criação de novo projeto"""
+    log_analytics_event('view_new_project_page', {
+        'user_id': st.session_state.get(USER_SESSION_KEY, {}).get('uid'),
+        'timestamp': datetime.datetime.now().isoformat()
+    })
+    
     print(f"DEBUG pagina_novo_projeto: Verificando Firebase. Initialized={FIREBASE_APP_INITIALIZED}")
     if not FIREBASE_APP_INITIALIZED:
         st.error("ALERTA: A conexão com o banco de dados (Firebase) falhou. Não é possível criar novo projeto.")
@@ -809,6 +889,14 @@ def pagina_novo_projeto():
 # ...
 
 def main():
+    """Função principal da aplicação"""
+    # Log de navegação
+    current_page = st.session_state.get(PAGINA_ATUAL_SESSION_KEY, 'login')
+    log_analytics_event('page_navigation', {
+        'page': current_page,
+        'timestamp': datetime.datetime.now().isoformat()
+    })
+
     print(f"DEBUG main(): Verificando FIREBASE_APP_INITIALIZED = {FIREBASE_APP_INITIALIZED}. Erro capturado: {FIREBASE_INIT_ERROR_MESSAGE}")
     
     if not FIREBASE_APP_INITIALIZED:
@@ -843,141 +931,129 @@ def main():
 
     # Verifica se o usuário está autenticado
     is_authenticated = st.session_state.get(AUTENTICADO_SESSION_KEY, False)
-    current_page = st.session_state.get(PAGINA_ATUAL_SESSION_KEY, 'login')
+    current_page_on_entry = st.session_state[PAGINA_ATUAL_SESSION_KEY]
+    final_target_page = current_page_on_entry # Página que será renderizada por padrão
 
-    # Se não estiver autenticado, mostra a página de login, cadastro ou reset de senha
-    if not is_authenticated:
-        if current_page == 'cadastro':
-            pagina_cadastro()
-        elif current_page == 'reset_password':
-            pagina_reset_password()
-        else:
-            pagina_login()
-        return
-    else: # Usuário está autenticado
-        current_page_on_entry = st.session_state[PAGINA_ATUAL_SESSION_KEY]
-        final_target_page = current_page_on_entry # Página que será renderizada por padrão
+    # --- Check Trial Expiration and Force Profile View ---
+    user_info = st.session_state.get(USER_SESSION_KEY)
+    user_uid = user_info.get('uid') if user_info else None
+    is_premium_user_from_db = False
+    
+    # Verificar status premium do usuário no DB
+    if user_uid and FIREBASE_APP_INITIALIZED:
+        try:
+            db = firestore.client()
+            usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid)).limit(1).stream()
+            usuario_doc_data_for_premium_check = None
+            for doc_premium in usuarios_query:
+                usuario_doc_data_for_premium_check = doc_premium.to_dict()
+                break
+            if usuario_doc_data_for_premium_check:
+                is_premium_user_from_db = usuario_doc_data_for_premium_check.get('premium', False)
+        except Exception as e:
+            print(f"Erro ao buscar status premium do usuário {user_uid} em app.py: {e}")
 
-        # --- Check Trial Expiration and Force Profile View ---
-        user_info = st.session_state.get(USER_SESSION_KEY)
-        user_uid = user_info.get('uid') if user_info else None
-        is_premium_user_from_db = False
-        
-        # Verificar status premium do usuário no DB
-        if user_uid and FIREBASE_APP_INITIALIZED:
-            try:
-                db = firestore.client()
-                usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid)).limit(1).stream()
-                usuario_doc_data_for_premium_check = None
-                for doc_premium in usuarios_query:
-                    usuario_doc_data_for_premium_check = doc_premium.to_dict()
-                    break
-                if usuario_doc_data_for_premium_check:
-                    is_premium_user_from_db = usuario_doc_data_for_premium_check.get('premium', False)
-            except Exception as e:
-                print(f"Erro ao buscar status premium do usuário {user_uid} em app.py: {e}")
+    # Lógica de redirecionamento pós-login
+    if st.session_state.get('just_logged_in', False):
+        del st.session_state['just_logged_in'] # Consome a flag
+        if is_premium_user_from_db:
+            final_target_page = 'editar_projeto'
+            if current_page_on_entry != 'editar_projeto':
+                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
+                st.rerun(); return
 
-        # Lógica de redirecionamento pós-login
-        if st.session_state.get('just_logged_in', False):
-            del st.session_state['just_logged_in'] # Consome a flag
-            if is_premium_user_from_db:
-                final_target_page = 'editar_projeto'
-                if current_page_on_entry != 'editar_projeto':
-                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
-                    st.rerun(); return
+    # Only perform trial check if Firebase is initialized and user UID is available
+    if not is_premium_user_from_db and user_uid and FIREBASE_APP_INITIALIZED: # Só verifica trial para não-premium
+        try:
+            db = firestore.client()
+            # Query the 'usuarios' collection by the 'uid' field
+            usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid)).limit(1).stream()
 
-        # Only perform trial check if Firebase is initialized and user UID is available
-        if not is_premium_user_from_db and user_uid and FIREBASE_APP_INITIALIZED: # Só verifica trial para não-premium
-            try:
-                db = firestore.client()
-                # Query the 'usuarios' collection by the 'uid' field
-                usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid)).limit(1).stream()
+            usuario_doc_data = None
+            for doc in usuarios_query:
+                usuario_doc_data = doc.to_dict()
+                break
 
-                usuario_doc_data = None
-                for doc in usuarios_query:
-                    usuario_doc_data = doc.to_dict()
-                    break
+            if usuario_doc_data and 'data_cadastro' in usuario_doc_data:
+                data_cadastro_ts = usuario_doc_data['data_cadastro'] # Assuming this is a Firestore Timestamp
+                # Ensure data_cadastro_ts is a Timestamp before converting
+                if isinstance(data_cadastro_ts, GCloudTimestamp):
+                     # GCloudTimestamp (DatetimeWithNanoseconds) is already a datetime-like object.
+                     # We just need to ensure it's timezone-aware (it should be UTC by default from Firestore).
+                     # If it might be naive, or to be explicit:
+                     data_cadastro_dt = data_cadastro_ts.replace(tzinfo=datetime.timezone.utc) if data_cadastro_ts.tzinfo is None else data_cadastro_ts
+                     
+                     current_time = datetime.datetime.now(datetime.timezone.utc) # Use timezone-aware datetime
 
-                if usuario_doc_data and 'data_cadastro' in usuario_doc_data:
-                    data_cadastro_ts = usuario_doc_data['data_cadastro'] # Assuming this is a Firestore Timestamp
-                    # Ensure data_cadastro_ts is a Timestamp before converting
-                    if isinstance(data_cadastro_ts, GCloudTimestamp):
-                         # GCloudTimestamp (DatetimeWithNanoseconds) is already a datetime-like object.
-                         # We just need to ensure it's timezone-aware (it should be UTC by default from Firestore).
-                         # If it might be naive, or to be explicit:
-                         data_cadastro_dt = data_cadastro_ts.replace(tzinfo=datetime.timezone.utc) if data_cadastro_ts.tzinfo is None else data_cadastro_ts
-                         
-                         current_time = datetime.datetime.now(datetime.timezone.utc) # Use timezone-aware datetime
-
-                         # Check if registration is older than 7 days
-                         if current_time - data_cadastro_dt > datetime.timedelta(days=7):
-                             st.session_state['forced_profile_view'] = True
-                         else:
-                             # Trial is active, ensure flag is not set
-                             if 'forced_profile_view' in st.session_state:
-                                  del st.session_state['forced_profile_view']
-                    else:
-                         # data_cadastro is not a Timestamp, handle error or assume no trial
-                         print(f"WARNING: data_cadastro for user {user_uid} is not a Firestore Timestamp.")
+                     # Check if registration is older than 7 days
+                     if current_time - data_cadastro_dt > datetime.timedelta(days=7):
+                         st.session_state['forced_profile_view'] = True
+                     else:
+                         # Trial is active, ensure flag is not set
                          if 'forced_profile_view' in st.session_state:
                               del st.session_state['forced_profile_view']
-
                 else:
-                    # User doc or data_cadastro not found - assume not in trial, ensure flag is not set
-                    if 'forced_profile_view' in st.session_state:
-                         del st.session_state['forced_profile_view']
+                     # data_cadastro is not a Timestamp, handle error or assume no trial
+                     print(f"WARNING: data_cadastro for user {user_uid} is not a Firestore Timestamp.")
+                     if 'forced_profile_view' in st.session_state:
+                          del st.session_state['forced_profile_view']
 
-            except Exception as e:
-                st.error(f"Erro ao verificar data de cadastro: {e}")
-                print(f"ERROR checking registration date: {traceback.format_exc()}") # Add detailed logging
-                # On error, don't force redirect and ensure flag is not set
+            else:
+                # User doc or data_cadastro not found - assume not in trial, ensure flag is not set
                 if 'forced_profile_view' in st.session_state:
                      del st.session_state['forced_profile_view']
 
-            # Se forced_profile_view for True (e não é premium), e a página alvo não for perfil/pagamento, muda para perfil
-            if st.session_state.get('forced_profile_view', False) and \
-               final_target_page not in ['perfil', 'pagamento_upgrade']:
-                final_target_page = 'perfil'
-                if current_page_on_entry != 'perfil':
-                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
-                    st.rerun(); return
+        except Exception as e:
+            st.error(f"Erro ao verificar data de cadastro: {e}")
+            print(f"ERROR checking registration date: {traceback.format_exc()}") # Add detailed logging
+            # On error, don't force redirect and ensure flag is not set
+            if 'forced_profile_view' in st.session_state:
+                 del st.session_state['forced_profile_view']
 
-        # Else, proceed with normal routing based on current_page
-        # --- Routing for Authenticated Users (usa final_target_page) ---
-        if final_target_page == 'projetos':
-            pagina_projetos()
-        elif final_target_page == 'novo_projeto':
-            pagina_novo_projeto()
-        elif final_target_page == 'editar_projeto':
-            pagina_editar_projeto_view() 
-        elif final_target_page == 'pagamento_upgrade':
-            pagina_pagamento_upgrade()
-        elif final_target_page == 'payment_success':
-            pagina_payment_success()
-        elif final_target_page == 'payment_failure':
-            pagina_payment_failure()
-        elif final_target_page == 'payment_pending':
-            pagina_payment_pending()
-        elif final_target_page == 'perfil':
-            pagina_perfil()
-        elif final_target_page == 'cadastro_edital':
-            pagina_cadastro_edital() 
-        elif final_target_page == 'cadastro_projeto':
-            pagina_cadastro_projeto()
-        elif final_target_page == 'editar_edital':
-            edital_id = st.session_state.get('edital_para_editar')
-            if edital_id:
-                pagina_editar_edital(edital_id)
-            else:
-                st.error("ID do edital não encontrado")
-                st.session_state['pagina_atual'] = 'projetos'
-                st.rerun()
-        elif final_target_page == 'assinatura':
-            pagina_assinatura()
+        # Se forced_profile_view for True (e não é premium), e a página alvo não for perfil/pagamento, muda para perfil
+        if st.session_state.get('forced_profile_view', False) and \
+           final_target_page not in ['perfil', 'pagamento_upgrade']:
+            final_target_page = 'perfil'
+            if current_page_on_entry != 'perfil':
+                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
+                st.rerun(); return
+
+    # Else, proceed with normal routing based on current_page
+    # --- Routing for Authenticated Users (usa final_target_page) ---
+    if final_target_page == 'projetos':
+        pagina_projetos()
+    elif final_target_page == 'novo_projeto':
+        pagina_novo_projeto()
+    elif final_target_page == 'editar_projeto':
+        pagina_editar_projeto_view() 
+    elif final_target_page == 'pagamento_upgrade':
+        pagina_pagamento_upgrade()
+    elif final_target_page == 'payment_success':
+        pagina_payment_success()
+    elif final_target_page == 'payment_failure':
+        pagina_payment_failure()
+    elif final_target_page == 'payment_pending':
+        pagina_payment_pending()
+    elif final_target_page == 'perfil':
+        pagina_perfil()
+    elif final_target_page == 'cadastro_edital':
+        pagina_cadastro_edital() 
+    elif final_target_page == 'cadastro_projeto':
+        pagina_cadastro_projeto()
+    elif final_target_page == 'editar_edital':
+        edital_id = st.session_state.get('edital_para_editar')
+        if edital_id:
+            pagina_editar_edital(edital_id)
         else:
-            # Fallback for unknown authenticated page
-            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
+            st.error("ID do edital não encontrado")
+            st.session_state['pagina_atual'] = 'projetos'
             st.rerun()
+    elif final_target_page == 'assinatura':
+        pagina_assinatura()
+    else:
+        # Fallback for unknown authenticated page
+        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
+        st.rerun()
 
 if __name__ == '__main__': # This block remains at the end
     main()
