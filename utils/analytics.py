@@ -1,5 +1,7 @@
 import streamlit as st
 from constants import USER_SESSION_KEY
+import json
+import datetime
 
 def track_event(event_name, params=None):
     """
@@ -62,4 +64,39 @@ def track_page_view(page_title, location=None, path=None):
     """
     
     # Render the script
-    st.markdown(script, unsafe_allow_html=True) 
+    st.markdown(script, unsafe_allow_html=True)
+
+def init_analytics():
+    """Inicializa o Google Analytics"""
+    st.markdown("""
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Z5YJBVKP9B"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-Z5YJBVKP9B');
+    </script>
+    """, unsafe_allow_html=True)
+
+def log_analytics_event(event_name, event_params=None):
+    """Log analytics events for debugging"""
+    if not event_params:
+        event_params = {}
+    
+    # Remove valores None do dicionário
+    safe_params = {k: v for k, v in event_params.items() if v is not None}
+    
+    # Adiciona timestamp se não existir
+    if 'timestamp' not in safe_params:
+        safe_params['timestamp'] = datetime.datetime.now().isoformat()
+    
+    # Envia o evento via JavaScript
+    st.components.v1.html(f"""
+    <script>
+        if (typeof gtag === 'function') {{
+            gtag('event', '{event_name}', {json.dumps(safe_params)});
+            console.log('Analytics Event:', '{event_name}', {json.dumps(safe_params)});
+        }}
+    </script>
+    """, height=0) 

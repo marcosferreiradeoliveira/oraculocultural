@@ -9,10 +9,19 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Variável global para o bucket
+_bucket = None
+
 def get_or_create_bucket():
     """
     Obtém ou cria o bucket do Storage se não existir
     """
+    global _bucket
+    
+    # Se já temos um bucket, retorna ele
+    if _bucket is not None:
+        return _bucket
+        
     try:
         if not initialize_firebase():
             raise RuntimeError("Falha ao inicializar Firebase")
@@ -27,26 +36,20 @@ def get_or_create_bucket():
             # Tenta acessar o bucket para verificar se existe
             bucket.exists()
             logger.info(f"Bucket {storage_bucket} encontrado")
-            return bucket
+            _bucket = bucket
+            return _bucket
         except Exception as e:
             logger.warning(f"Bucket {storage_bucket} não encontrado. Tentando criar...")
             # Tenta criar o bucket
             bucket = storage.bucket(storage_bucket)
             bucket.create()
             logger.info(f"Bucket {storage_bucket} criado com sucesso")
-            return bucket
+            _bucket = bucket
+            return _bucket
             
     except Exception as e:
         logger.error(f"Erro ao inicializar/criar bucket do Storage: {str(e)}")
         raise
-
-# Inicializa o bucket
-try:
-    bucket = get_or_create_bucket()
-    logger.info("Firebase Storage client inicializado com sucesso")
-except Exception as e:
-    logger.error(f"Erro ao inicializar Firebase Storage: {str(e)}")
-    raise
 
 def upload_file(file_data, destination_path, content_type=None):
     """
@@ -61,8 +64,7 @@ def upload_file(file_data, destination_path, content_type=None):
         dict: Dicionário com informações do upload (url, path, etc)
     """
     try:
-        # Garante que o bucket existe
-        global bucket
+        # Obtém o bucket
         bucket = get_or_create_bucket()
         
         # Cria um blob no bucket
@@ -102,8 +104,7 @@ def delete_file(storage_path):
         storage_path: Caminho do arquivo no storage
     """
     try:
-        # Garante que o bucket existe
-        global bucket
+        # Obtém o bucket
         bucket = get_or_create_bucket()
         
         blob = bucket.blob(storage_path)
@@ -124,8 +125,7 @@ def get_file_url(storage_path):
         str: URL pública do arquivo
     """
     try:
-        # Garante que o bucket existe
-        global bucket
+        # Obtém o bucket
         bucket = get_or_create_bucket()
         
         blob = bucket.blob(storage_path)
