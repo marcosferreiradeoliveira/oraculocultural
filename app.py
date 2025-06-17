@@ -24,7 +24,7 @@ from langchain_openai import ChatOpenAI
 import datetime # Para trabalhar com datas e horas
 from google.cloud.firestore_v1 import FieldFilter # Necessário para consultas where no Firestore
 import time # Importado para usar a função sleep
-import os
+import firebase_admin # Importar firebase_admin
 from google.cloud.firestore_v1 import FieldFilter # FieldFilter is correctly imported
 from google.api_core.datetime_helpers import DatetimeWithNanoseconds as GCloudTimestamp # More specific import for Timestamp
 import json # Importado para tentar carregar JSON de string
@@ -54,11 +54,8 @@ FIREBASE_INIT_ERROR_MESSAGE = None # Para armazenar a mensagem de erro da inicia
 
 def initialize_firebase_app():
     global FIREBASE_APP_INITIALIZED, FIREBASE_INIT_ERROR_MESSAGE
-    if firebase_admin._apps: 
-        FIREBASE_APP_INITIALIZED = True
-        print("INFO: Firebase Admin já estava inicializado.")
-        return True
-
+    # A função initialize_firebase() (de services/firebase_init.py) já lida com a idempotência.
+    # Não é necessário verificar firebase_admin._apps aqui diretamente no app.py.
     print("INFO: Tentando inicializar Firebase Admin...")
     success = initialize_firebase()
     FIREBASE_APP_INITIALIZED = success
