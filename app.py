@@ -1,60 +1,12 @@
 import streamlit as st
-import datetime # Para trabalhar com datas e horas
-from google.cloud.firestore_v1 import FieldFilter # Necessário para consultas where no Firestore
-import time # Importado para usar a função sleep
 import os
 from services.env_manager import get_env_value
-import json
+from dotenv import load_dotenv # Importar load_dotenv
 
-# Create Streamlit secrets directory and file from Railway environment variables
-def setup_streamlit_secrets():
-    secrets_content = os.getenv("STREAMLIT_SECRETS_TOML")
-    if secrets_content:
-        os.makedirs(".streamlit", exist_ok=True)
-        with open(".streamlit/secrets.toml", "w") as f:
-            f.write(secrets_content)
-    else:
-        # Create secrets.toml from individual environment variables
-        secrets = {
-            "openai": {
-                "api_key": os.getenv("OPENAI_API_KEY")
-            },
-            "firebase_credentials": json.loads(os.getenv("FIREBASE_CREDENTIALS", "{}")),
-            "mercadopago": {
-                "access_token": os.getenv("MP_ACCESS_TOKEN"),
-                "public_key": os.getenv("MP_PUBLIC_KEY"),
-                "STREAMLIT_BASE_URL": os.getenv("STREAMLIT_BASE_URL")
-            },
-            "email": {
-                "user": os.getenv("EMAIL_USER"),
-                "password": os.getenv("EMAIL_PASSWORD")
-            }
-        }
-        
-        # Convert secrets to TOML format
-        toml_content = ""
-        for section, values in secrets.items():
-            if values:  # Only add non-empty sections
-                toml_content += f"[{section}]\n"
-                for key, value in values.items():
-                    if value is not None:  # Only add non-None values
-                        if isinstance(value, str):
-                            toml_content += f'{key} = "{value}"\n'
-                        elif isinstance(value, dict):
-                            toml_content += f'{key} = {json.dumps(value)}\n'
-                        else:
-                            toml_content += f'{key} = {value}\n'
-                toml_content += "\n"
-        
-        # Write secrets to file
-        os.makedirs(".streamlit", exist_ok=True)
-        with open(".streamlit/secrets.toml", "w") as f:
-            f.write(toml_content)
+# Carregar variáveis de ambiente do arquivo .env (para desenvolvimento local)
+load_dotenv()
 
-# Setup secrets at startup
-setup_streamlit_secrets()
-
-# Configuração da página Streamlit (deve ser a primeira chamada Streamlit NO SCRIPT PRINCIPAL)
+# Configuração da página - DEVE ser o primeiro comando Streamlit
 st.set_page_config(
     page_title="Oráculo Cultural",
     page_icon="🎭",
@@ -67,182 +19,21 @@ st.set_page_config(
     }
 )
 
-# Implementação do Google Analytics 4
-st.markdown("""
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Z5YJBVKP9B"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-Z5YJBVKP9B', {
-            'app_name': 'Oráculo Cultural',
-            'app_version': '1.0.0',
-            'page_location': window.location.href,
-            'page_path': window.location.pathname,
-            'page_title': document.title,
-            'send_page_view': true,
-            'debug_mode': true
-        });
-
-        // Função de debug para GA4
-        function debugGA4() {
-            console.log('=== Google Analytics 4 Debug ===');
-            console.log('Current URL:', window.location.href);
-            console.log('Is Localhost:', window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-            console.log('Port:', window.location.port);
-            console.log('GA4 Initialized:', typeof gtag === 'function');
-        }
-
-        // Função para enviar eventos
-        function sendGA4Event(eventName, eventParams = {}) {
-            gtag('event', eventName, {
-                ...eventParams,
-                'timestamp': new Date().toISOString(),
-                'page_url': window.location.href,
-                'page_path': window.location.pathname,
-                'page_title': document.title,
-                'app_name': 'Oráculo Cultural'
-            });
-            console.log('GA4 Event sent:', eventName, eventParams);
-        }
-
-        // Cookie Consent Banner
-        function createCookieConsentBanner() {
-            const banner = document.createElement('div');
-            banner.style.cssText = `
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: rgba(0, 0, 0, 0.8);
-                color: white;
-                padding: 1rem;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                z-index: 1000;
-            `;
-            
-            banner.innerHTML = `
-                <div style="flex-grow: 1; margin-right: 1rem;">
-                    Utilizamos cookies para melhorar sua experiência. Ao continuar navegando, você concorda com nossa política de cookies.
-                </div>
-                <div>
-                    <button onclick="acceptCookies()" style="
-                        background: #C02679;
-                        color: white;
-                        border: none;
-                        padding: 0.5rem 1rem;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        margin-right: 0.5rem;
-                    ">Aceitar</button>
-                    <button onclick="rejectCookies()" style="
-                        background: transparent;
-                        color: white;
-                        border: 1px solid white;
-                        padding: 0.5rem 1rem;
-                        border-radius: 4px;
-                        cursor: pointer;
-                    ">Recusar</button>
-                </div>
-            `;
-            
-            document.body.appendChild(banner);
-        }
-        
-        function acceptCookies() {
-            localStorage.setItem('cookieConsent', 'accepted');
-            document.querySelector('div[style*="position: fixed"]').remove();
-            sendGA4Event('cookie_consent', {
-                'consent_status': 'accepted',
-                'consent_timestamp': new Date().toISOString()
-            });
-            debugGA4();
-        }
-        
-        function rejectCookies() {
-            localStorage.setItem('cookieConsent', 'rejected');
-            document.querySelector('div[style*="position: fixed"]').remove();
-            sendGA4Event('cookie_consent', {
-                'consent_status': 'rejected',
-                'consent_timestamp': new Date().toISOString()
-            });
-        }
-        
-        // Verificar consentimento de cookies
-        if (!localStorage.getItem('cookieConsent')) {
-            createCookieConsentBanner();
-        }
-        
-        // Inicializar após carregar a página
-        window.addEventListener('load', function() {
-            debugGA4();
-            
-            // Enviar evento de carregamento da página
-            sendGA4Event('page_view', {
-                'page_type': 'streamlit',
-                'app_name': 'Oráculo Cultural',
-                'streamlit_version': '1.38.0'
-            });
-            
-            // Monitorar mudanças de URL
-            let lastUrl = location.href;
-            new MutationObserver(() => {
-                const url = location.href;
-                if (url !== lastUrl) {
-                    lastUrl = url;
-                    if (localStorage.getItem('cookieConsent') === 'accepted') {
-                        sendGA4Event('page_view', {
-                            'page_type': 'streamlit',
-                            'app_name': 'Oráculo Cultural',
-                            'streamlit_version': '1.38.0'
-                        });
-                        debugGA4();
-                    }
-                }
-            }).observe(document, {subtree: true, childList: true});
-        });
-
-        // Enviar evento de teste a cada 30 segundos
-        setInterval(() => {
-            if (localStorage.getItem('cookieConsent') === 'accepted') {
-                sendGA4Event('heartbeat', {
-                    'page_type': 'streamlit',
-                    'app_name': 'Oráculo Cultural'
-                });
-            }
-        }, 30000);
-
-        // Enviar evento de teste inicial
-        setTimeout(() => {
-            sendGA4Event('test_event', {
-                'test_type': 'initialization',
-                'test_timestamp': new Date().toISOString()
-            });
-        }, 2000);
-    </script>
-""", unsafe_allow_html=True)
-
-import tempfile
+# As importações necessárias devem vir após a configuração da página
 from langchain_openai import ChatOpenAI
+import datetime # Para trabalhar com datas e horas
+from google.cloud.firestore_v1 import FieldFilter # Necessário para consultas where no Firestore
+import time # Importado para usar a função sleep
 import os
-import firebase_admin
-from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1 import FieldFilter # FieldFilter is correctly imported
 from google.api_core.datetime_helpers import DatetimeWithNanoseconds as GCloudTimestamp # More specific import for Timestamp
 import json # Importado para tentar carregar JSON de string
 from streamlit.runtime.secrets import AttrDict # Import AttrDict para verificação de tipo
 import traceback # Importado para stack traces detalhados
 from services.firebase_init import initialize_firebase, get_error_message
-from dotenv import load_dotenv # Para carregar variáveis de .env
-
-# Carrega variáveis de ambiente do arquivo .env (se existir)
-load_dotenv()
 
 # Configuração do OpenAI
-llm = None 
+llm = None
 try:
     openai_api_key = get_env_value("openai.api_key")
     if not openai_api_key:
