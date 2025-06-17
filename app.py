@@ -29,12 +29,20 @@ def log_analytics_event(event_name, event_params=None):
     if event_params:
         print(f"📊 Event Params: {event_params}")
     
+    # Garante que event_params seja um dicionário válido
+    safe_params = event_params or {}
+    if isinstance(safe_params, dict):
+        # Remove valores None do dicionário
+        safe_params = {k: v for k, v in safe_params.items() if v is not None}
+    else:
+        safe_params = {}
+    
     # Adiciona o evento ao console do navegador
     st.components.v1.html(f"""
     <script>
-        console.log('Analytics Event:', '{event_name}', {json.dumps(event_params or {})});
+        console.log('Analytics Event:', '{event_name}', {json.dumps(safe_params)});
         if (typeof gtag === 'function') {{
-            gtag('event', '{event_name}', {json.dumps(event_params or {})});
+            gtag('event', '{event_name}', {json.dumps(safe_params)});
             console.log('Event sent to GA4');
         }} else {{
             console.error('gtag not available');
@@ -494,8 +502,11 @@ def get_user_projects(user_id):
 
 def pagina_projetos():
     """Página principal de projetos"""
+    user_data = st.session_state.get(USER_SESSION_KEY)
+    user_id = user_data.get('uid') if user_data else None
+    
     log_analytics_event('view_projects_page', {
-        'user_id': st.session_state.get(USER_SESSION_KEY, {}).get('uid'),
+        'user_id': user_id,
         'timestamp': datetime.datetime.now().isoformat()
     })
     
@@ -796,8 +807,11 @@ def pagina_projetos():
 
 def pagina_novo_projeto():
     """Página de criação de novo projeto"""
+    user_data = st.session_state.get(USER_SESSION_KEY)
+    user_id = user_data.get('uid') if user_data else None
+    
     log_analytics_event('view_new_project_page', {
-        'user_id': st.session_state.get(USER_SESSION_KEY, {}).get('uid'),
+        'user_id': user_id,
         'timestamp': datetime.datetime.now().isoformat()
     })
     
@@ -892,8 +906,12 @@ def main():
     """Função principal da aplicação"""
     # Log de navegação
     current_page = st.session_state.get(PAGINA_ATUAL_SESSION_KEY, 'login')
+    user_data = st.session_state.get(USER_SESSION_KEY)
+    user_id = user_data.get('uid') if user_data else None
+    
     log_analytics_event('page_navigation', {
         'page': current_page,
+        'user_id': user_id,
         'timestamp': datetime.datetime.now().isoformat()
     })
 
