@@ -993,7 +993,7 @@ def main():
 
             # Se forced_profile_view for True (e não é premium), e a página alvo não for perfil/pagamento, muda para perfil
             if st.session_state.get('forced_profile_view', False) and \
-               final_target_page not in ['perfil', 'pagamento_upgrade']:
+               final_target_page not in ['perfil', 'pagamento_upgrade', 'assinatura']:
                 final_target_page = 'perfil'
                 if current_page_on_entry != 'perfil':
                     st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
@@ -1001,6 +1001,7 @@ def main():
 
         # Else, proceed with normal routing based on current_page
         # --- Routing for Authenticated Users (usa final_target_page) ---
+        print(f"DEBUG: Página atual = {final_target_page}")
         if final_target_page == 'projetos':
             pagina_projetos()
         elif final_target_page == 'novo_projeto':

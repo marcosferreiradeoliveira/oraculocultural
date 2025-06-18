@@ -36,8 +36,9 @@ def pagina_pagamento_upgrade():
     track_page_view('Upgrade Payment Page')
     
     # Inicializa o Firebase (com cache)
-    firebase_app = initialize_firebase_app()
+    firebase_app = initialize_firebase()
     if not firebase_app:
+        st.error(get_error_message())
         return
 
     if not st.session_state.get(USER_SESSION_KEY):
@@ -61,8 +62,15 @@ def pagina_pagamento_upgrade():
     mp_access_token = credentials['access_token']
     mp_public_key = credentials['public_key']
 
+    # Debug: verificar credenciais
+    print(f"DEBUG: MP Access Token presente: {bool(mp_access_token)}")
+    print(f"DEBUG: MP Public Key presente: {bool(mp_public_key)}")
+    if mp_access_token:
+        print(f"DEBUG: MP Access Token (primeiros 10 chars): {mp_access_token[:10]}...")
+
     if not mp_access_token:
         st.error("Credenciais do Mercado Pago não configuradas")
+        st.write("Verifique se as variáveis de ambiente MP_ACCESS_TOKEN estão configuradas no arquivo .env")
         return
 
     # Recuperar informações do usuário
@@ -115,11 +123,10 @@ def pagina_pagamento_upgrade():
                     "entity_type": "individual"
                 },
                 "back_urls": {
-                    "success": f"{base_url}?page=payment_success",
-                    "failure": f"{base_url}?page=payment_failure",
-                    "pending": f"{base_url}?page=payment_pending"
+                    "success": f"{base_url}/?page=payment_success",
+                    "failure": f"{base_url}/?page=payment_failure",
+                    "pending": f"{base_url}/?page=payment_pending"
                 },
-                "auto_return": "approved",
                 "external_reference": user_uid,
                 "notification_url": f"{base_url}/mercadopago_webhook",
                 "statement_descriptor": "ORACULO PREMIUM",
@@ -150,13 +157,17 @@ def pagina_pagamento_upgrade():
                     'user_email': payer_email
                 })
             else:
-                st.error("Erro ao criar preferência de pagamento")
+                st.error(f"Erro ao criar preferência de pagamento. Status: {preference_response['status']}")
+                st.write("Resposta completa do Mercado Pago:")
+                st.json(preference_response)
+                st.write("Verifique se as credenciais do Mercado Pago estão configuradas corretamente e se o e-mail do usuário é válido.")
 
         except Exception as e:
             track_event('upgrade_failed', {
                 'error_message': str(e)
             })
-            st.error("Ocorreu um erro ao processar o pagamento")
+            st.error(f"Ocorreu um erro ao processar o pagamento: {str(e)}")
+            st.write("Verifique se as credenciais do Mercado Pago estão configuradas corretamente.")
 
     # Botão para voltar para a página de perfil
     if st.button("Voltar para Perfil"):
