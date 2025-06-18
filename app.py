@@ -448,6 +448,64 @@ st.markdown("""
             max-width: 800px;
             margin: 0 auto;
         }
+
+        /* Responsividade geral */
+        @media (max-width: 992px) {
+            .main .block-container {
+                max-width: 100% !important;
+                padding-left: 0.5rem !important;
+                padding-right: 0.5rem !important;
+            }
+            .section-header, .top-menu {
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 0.5rem !important;
+            }
+            .project-card, .home-box {
+                height: auto !important;
+                min-height: 180px !important;
+                padding: 1rem !important;
+                margin-bottom: 1rem !important;
+            }
+            .project-card h3, .home-box h3 {
+                font-size: 1rem !important;
+            }
+            .project-description {
+                -webkit-line-clamp: 4 !important;
+                max-height: 6em !important;
+            }
+            .stButton button {
+                font-size: 1rem !important;
+                padding: 0.5rem 1rem !important;
+            }
+            .stTextInput input {
+                font-size: 1rem !important;
+            }
+            .stApp {
+                padding: 0 !important;
+            }
+            .stMarkdown, .stText, .stButton {
+                animation: none !important;
+            }
+            .stDivider {
+                margin: 1rem 0 !important;
+            }
+            .stSuccess, .stError {
+                padding: 0.5rem !important;
+            }
+        }
+        @media (max-width: 600px) {
+            .main .block-container {
+                padding-left: 0.2rem !important;
+                padding-right: 0.2rem !important;
+            }
+            .project-card, .home-box {
+                padding: 0.5rem !important;
+            }
+            .project-card h3, .home-box h3 {
+                font-size: 0.95rem !important;
+            }
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -889,10 +947,6 @@ def main():
     if PAGINA_ATUAL_SESSION_KEY not in st.session_state:
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro'
 
-    # Inicializa o estado para forçar visualização do perfil (para teste expirado)
-    if 'forced_profile_view' not in st.session_state:
-        st.session_state['forced_profile_view'] = False
-
     # Verificar se há um parâmetro 'page' na URL (vindo de redirects externos como Mercado Pago)
     query_params = st.query_params
     if "page" in query_params:
@@ -919,85 +973,13 @@ def main():
             pagina_login()
         return
     else: # Usuário está autenticado
-        # --- Check Trial Expiration and Force Profile View ---
-        user_info = st.session_state.get(USER_SESSION_KEY)
-        user_uid = user_info.get('uid') if user_info else None
-        is_premium_user_from_db = False
-        
-        # Verificar status premium do usuário no DB
-        if user_uid and FIREBASE_APP_INITIALIZED:
-            try:
-                db = firestore.client()
-                usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid)).limit(1).stream()
-                usuario_doc_data_for_premium_check = None
-                for doc_premium in usuarios_query:
-                    usuario_doc_data_for_premium_check = doc_premium.to_dict()
-                    break
-                if usuario_doc_data_for_premium_check:
-                    is_premium_user_from_db = usuario_doc_data_for_premium_check.get('premium', False)
-            except Exception as e:
-                print(f"Erro ao buscar status premium do usuário {user_uid} em app.py: {e}")
-
         # Lógica de redirecionamento pós-login
         if st.session_state.get('just_logged_in', False):
             del st.session_state['just_logged_in'] # Consome a flag
-            if is_premium_user_from_db:
-                final_target_page = 'editar_projeto'
-                if current_page_on_entry != 'editar_projeto':
-                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
-                    st.rerun(); return
-
-        # Only perform trial check if Firebase is initialized and user UID is available
-        if not is_premium_user_from_db and user_uid and FIREBASE_APP_INITIALIZED: # Só verifica trial para não-premium
-            try:
-                db = firestore.client()
-                # Query the 'usuarios' collection by the 'uid' field
-                usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid)).limit(1).stream()
-
-                usuario_doc_data = None
-                for doc in usuarios_query:
-                    usuario_doc_data = doc.to_dict()
-                    break
-
-                if usuario_doc_data and 'data_cadastro' in usuario_doc_data:
-                    data_cadastro_ts = usuario_doc_data['data_cadastro'] # Assuming this is a Firestore Timestamp
-                    # Ensure data_cadastro_ts is a Timestamp before converting
-                    if isinstance(data_cadastro_ts, GCloudTimestamp):
-                         # GCloudTimestamp (DatetimeWithNanoseconds) is already a datetime-like object.
-                         # We just need to ensure it's timezone-aware (it should be UTC by default from Firestore).
-                         # If it might be naive, or to be explicit:
-                         data_cadastro_dt = data_cadastro_ts.replace(tzinfo=datetime.timezone.utc) if data_cadastro_ts.tzinfo is None else data_cadastro_ts
-                         
-                         current_time = datetime.datetime.now(datetime.timezone.utc) # Use timezone-aware datetime
-
-                         # Check if registration is older than 7 days
-                         if current_time - data_cadastro_dt > datetime.timedelta(days=7):
-                             st.session_state['forced_profile_view'] = True
-                    else:
-                         # data_cadastro is not a Timestamp, handle error or assume no trial
-                         print(f"WARNING: data_cadastro for user {user_uid} is not a Firestore Timestamp.")
-                         if 'forced_profile_view' in st.session_state:
-                              del st.session_state['forced_profile_view']
-
-                else:
-                    # User doc or data_cadastro not found - assume not in trial, ensure flag is not set
-                    if 'forced_profile_view' in st.session_state:
-                         del st.session_state['forced_profile_view']
-
-            except Exception as e:
-                st.error(f"Erro ao verificar data de cadastro: {e}")
-                print(f"ERROR checking registration date: {traceback.format_exc()}") # Add detailed logging
-                # On error, don't force redirect and ensure flag is not set
-                if 'forced_profile_view' in st.session_state:
-                     del st.session_state['forced_profile_view']
-
-            # Se forced_profile_view for True (e não é premium), e a página alvo não for perfil/pagamento, muda para perfil
-            if st.session_state.get('forced_profile_view', False) and \
-               final_target_page not in ['perfil', 'pagamento_upgrade', 'assinatura']:
-                final_target_page = 'perfil'
-                if current_page_on_entry != 'perfil':
-                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'perfil'
-                    st.rerun(); return
+            final_target_page = 'editar_projeto'
+            if current_page_on_entry != 'editar_projeto':
+                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
+                st.rerun(); return
 
         # Else, proceed with normal routing based on current_page
         # --- Routing for Authenticated Users (usa final_target_page) ---

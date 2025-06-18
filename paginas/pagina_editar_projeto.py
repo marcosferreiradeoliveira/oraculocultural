@@ -61,15 +61,63 @@ def pagina_editar_projeto():
     
     st.markdown("""
     <style>
+        /* Sidebar padrão para desktop */
         section[data-testid="stSidebar"] {
             min-width: 250px !important;
             width: 250px !important;
             visibility: visible !important;
             transform: none !important;
+            transition: all 0.3s ease;
         }
         section[data-testid="stSidebar"] > div {padding-top: 2rem;}
         section[data-testid="stSidebar"] > div > div {padding-top: 2rem;}
         div[data-testid="collapsedControl"] {display: none !important;}
+
+        /* Responsividade: recolher sidebar em telas pequenas */
+        @media (max-width: 992px) {
+            section[data-testid="stSidebar"] {
+                min-width: 0 !important;
+                width: 0 !important;
+                visibility: hidden !important;
+                transform: translateX(-100%) !important;
+                padding: 0 !important;
+            }
+            /* Mostra o botão de expandir sidebar do Streamlit */
+            div[data-testid="collapsedControl"] {display: block !important;}
+            .stApp main, .stApp .block-container {
+                padding: 0.5rem !important;
+            }
+            .stApp h1, .stApp h2, .stApp h3 {
+                font-size: 1.1rem !important;
+                margin-bottom: 0.5rem !important;
+            }
+            .stApp .stTextInput input, .stApp .stTextArea textarea {
+                font-size: 1rem !important;
+            }
+            .stApp .stButton button {
+                font-size: 1rem !important;
+                padding: 0.5rem 1rem !important;
+            }
+            .stApp .project-card {
+                min-height: 120px !important;
+                padding: 0.5rem !important;
+            }
+            .stApp .project-card h3 {
+                font-size: 1rem !important;
+            }
+            .stApp .project-description {
+                -webkit-line-clamp: 6 !important;
+                max-height: 8em !important;
+            }
+        }
+        @media (max-width: 600px) {
+            .stApp main, .stApp .block-container {
+                padding: 0.1rem !important;
+            }
+            .stApp h1, .stApp h2, .stApp h3 {
+                font-size: 1rem !important;
+            }
+        }
     </style>
     """, unsafe_allow_html=True)
 
