@@ -5,7 +5,7 @@ from dotenv import load_dotenv # Importar load_dotenv
 from firebase_admin import firestore # Adicionar importação do firestore
 import json # Importado para tentar carregar JSON de string
 import datetime # Para trabalhar com datas e horas
-from utils.analytics import init_analytics, log_analytics_event
+import streamlit_analytics
 
 # Configuração da página - DEVE ser o primeiro comando Streamlit
 st.set_page_config(
@@ -75,21 +75,6 @@ from services.firebase_init import initialize_firebase, get_error_message
 FIREBASE_APP_INITIALIZED = False 
 FIREBASE_INIT_ERROR_MESSAGE = None
 
-def inject_ga():
-    GA_ID = "G-Z5YJBVKP9B"  # Substitua pela sua ID de Métricas
-
-    GA_SCRIPT = f"""
-        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
-        <script>
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){{dataLayer.push(arguments);}}
-          gtag('js', new Date());
-          gtag('config', '{GA_ID}');
-        </script>
-    """
-    # st.components.v1.html é a forma recomendada para injetar HTML/JS
-    st.components.v1.html(GA_SCRIPT, height=0)
-
 
 def initialize_firebase_app():
     global FIREBASE_APP_INITIALIZED, FIREBASE_INIT_ERROR_MESSAGE
@@ -105,9 +90,6 @@ def initialize_firebase_app():
 
 # Inicializa o Firebase antes de qualquer outra coisa
 initialize_firebase_app()
-
-# Inicializa o Google Analytics
-init_analytics()
 
 # Configuração do OpenAI
 llm = None
@@ -945,96 +927,91 @@ def pagina_novo_projeto():
 
 def main():
     """Função principal da aplicação"""
-    inject_ga()
-    print(f"DEBUG main(): Verificando FIREBASE_APP_INITIALIZED = {FIREBASE_APP_INITIALIZED}. Erro capturado: {FIREBASE_INIT_ERROR_MESSAGE}")
-    
-    # Verifica se o Firebase foi inicializado corretamente
-    if not FIREBASE_APP_INITIALIZED:
-        error_display_message = FIREBASE_INIT_ERROR_MESSAGE or "Erro desconhecido durante a inicialização do Firebase."
-        st.error(f"Falha crítica na inicialização do Firebase. A aplicação não pode continuar. Detalhe: {error_display_message}")
-        st.stop() 
-    
-    if llm is None and st.session_state.get(PAGINA_ATUAL_SESSION_KEY, 'login') not in ['login', 'cadastro', 'reset_password']:
-        st.warning("O modelo de linguagem (OpenAI) não foi inicializado. Algumas funcionalidades podem estar indisponíveis ou apresentar erros.")
-
-    if AUTENTICADO_SESSION_KEY not in st.session_state:
-        st.session_state[AUTENTICADO_SESSION_KEY] = False
-    if USER_SESSION_KEY not in st.session_state:
-        st.session_state[USER_SESSION_KEY] = None
-    if PAGINA_ATUAL_SESSION_KEY not in st.session_state:
-        st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro'
-
-    # Verificar se há um parâmetro 'page' na URL (vindo de redirects externos como Mercado Pago)
-    query_params = st.query_params
-    if "page" in query_params:
-        page_from_query = query_params.get("page")[0] # Pega o primeiro valor
-        # Valide 'page_from_query' contra uma lista de páginas permitidas por query param
-        allowed_query_pages = ['payment_success', 'payment_failure', 'payment_pending']
-        if page_from_query in allowed_query_pages:
-            st.session_state[PAGINA_ATUAL_SESSION_KEY] = page_from_query
-            # Limpar os query_params para evitar re-roteamento em reruns internos
-            st.query_params.clear() # Ou st.experimental_set_query_params() para remover específicos
-
-    # Verifica se o usuário está autenticado
-    is_authenticated = st.session_state.get(AUTENTICADO_SESSION_KEY, False)
-    current_page_on_entry = st.session_state[PAGINA_ATUAL_SESSION_KEY]
-    final_target_page = current_page_on_entry # Página que será renderizada por padrão
-
-    # Se não estiver autenticado, mostra a página de login, cadastro ou reset de senha
-    if not is_authenticated:
-        if current_page_on_entry == 'cadastro':
-            pagina_cadastro()
-        elif current_page_on_entry == 'reset_password':
-            pagina_reset_password()
-        else:
-            pagina_login()
-        return
-    else: # Usuário está autenticado
-        # Lógica de redirecionamento pós-login
-        if st.session_state.get('just_logged_in', False):
-            del st.session_state['just_logged_in'] # Consome a flag
-            final_target_page = 'editar_projeto'
-            if current_page_on_entry != 'editar_projeto':
-                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
-                st.rerun(); return
-
-        # Else, proceed with normal routing based on current_page
-        # --- Routing for Authenticated Users (usa final_target_page) ---
-        print(f"DEBUG: Página atual = {final_target_page}")
-        if final_target_page == 'projetos':
-            pagina_projetos()
-        elif final_target_page == 'novo_projeto':
-            pagina_novo_projeto()
-        elif final_target_page == 'editar_projeto':
-            pagina_editar_projeto_view() 
-        elif final_target_page == 'pagamento_upgrade':
-            pagina_pagamento_upgrade()
-        elif final_target_page == 'payment_success':
-            pagina_payment_success()
-        elif final_target_page == 'payment_failure':
-            pagina_payment_failure()
-        elif final_target_page == 'payment_pending':
-            pagina_payment_pending()
-        elif final_target_page == 'perfil':
-            pagina_perfil()
-        elif final_target_page == 'cadastro_edital':
-            pagina_cadastro_edital() 
-        elif final_target_page == 'cadastro_projeto':
-            pagina_cadastro_projeto()
-        elif final_target_page == 'editar_edital':
-            edital_id = st.session_state.get('edital_para_editar')
-            if edital_id:
-                pagina_editar_edital(edital_id)
+    # Tracking global de interações com streamlit-analytics
+    with streamlit_analytics.track():
+        # Conteúdo principal do app
+        print(f"DEBUG main(): Verificando FIREBASE_APP_INITIALIZED = {FIREBASE_APP_INITIALIZED}. Erro capturado: {FIREBASE_INIT_ERROR_MESSAGE}")
+        # Verifica se o Firebase foi inicializado corretamente
+        if not FIREBASE_APP_INITIALIZED:
+            error_display_message = FIREBASE_INIT_ERROR_MESSAGE or "Erro desconhecido durante a inicialização do Firebase."
+            st.error(f"Falha crítica na inicialização do Firebase. A aplicação não pode continuar. Detalhe: {error_display_message}")
+            st.stop() 
+        if llm is None and st.session_state.get(PAGINA_ATUAL_SESSION_KEY, 'login') not in ['login', 'cadastro', 'reset_password']:
+            st.warning("O modelo de linguagem (OpenAI) não foi inicializado. Algumas funcionalidades podem estar indisponíveis ou apresentar erros.")
+        if AUTENTICADO_SESSION_KEY not in st.session_state:
+            st.session_state[AUTENTICADO_SESSION_KEY] = False
+        if USER_SESSION_KEY not in st.session_state:
+            st.session_state[USER_SESSION_KEY] = None
+        if PAGINA_ATUAL_SESSION_KEY not in st.session_state:
+            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro'
+        # Verificar se há um parâmetro 'page' na URL (vindo de redirects externos como Mercado Pago)
+        query_params = st.query_params
+        if "page" in query_params:
+            page_from_query = query_params.get("page")[0] # Pega o primeiro valor
+            # Valide 'page_from_query' contra uma lista de páginas permitidas por query param
+            allowed_query_pages = ['payment_success', 'payment_failure', 'payment_pending']
+            if page_from_query in allowed_query_pages:
+                st.session_state[PAGINA_ATUAL_SESSION_KEY] = page_from_query
+                # Limpar os query_params para evitar re-roteamento em reruns internos
+                st.query_params.clear() # Ou st.experimental_set_query_params() para remover específicos
+        # Verifica se o usuário está autenticado
+        is_authenticated = st.session_state.get(AUTENTICADO_SESSION_KEY, False)
+        current_page_on_entry = st.session_state[PAGINA_ATUAL_SESSION_KEY]
+        final_target_page = current_page_on_entry # Página que será renderizada por padrão
+        # Se não estiver autenticado, mostra a página de login, cadastro ou reset de senha
+        if not is_authenticated:
+            if current_page_on_entry == 'cadastro':
+                pagina_cadastro()
+            elif current_page_on_entry == 'reset_password':
+                pagina_reset_password()
             else:
-                st.error("ID do edital não encontrado")
-                st.session_state['pagina_atual'] = 'projetos'
+                pagina_login()
+            return
+        else: # Usuário está autenticado
+            # Lógica de redirecionamento pós-login
+            if st.session_state.get('just_logged_in', False):
+                del st.session_state['just_logged_in'] # Consome a flag
+                final_target_page = 'editar_projeto'
+                if current_page_on_entry != 'editar_projeto':
+                    st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'editar_projeto'
+                    st.rerun(); return
+            # Else, proceed with normal routing based on current_page
+            # --- Routing for Authenticated Users (usa final_target_page) ---
+            print(f"DEBUG: Página atual = {final_target_page}")
+            if final_target_page == 'projetos':
+                pagina_projetos()
+            elif final_target_page == 'novo_projeto':
+                pagina_novo_projeto()
+            elif final_target_page == 'editar_projeto':
+                pagina_editar_projeto_view() 
+            elif final_target_page == 'pagamento_upgrade':
+                pagina_pagamento_upgrade()
+            elif final_target_page == 'payment_success':
+                pagina_payment_success()
+            elif final_target_page == 'payment_failure':
+                pagina_payment_failure()
+            elif final_target_page == 'payment_pending':
+                pagina_payment_pending()
+            elif final_target_page == 'perfil':
+                pagina_perfil()
+            elif final_target_page == 'cadastro_edital':
+                pagina_cadastro_edital() 
+            elif final_target_page == 'cadastro_projeto':
+                pagina_cadastro_projeto()
+            elif final_target_page == 'editar_edital':
+                edital_id = st.session_state.get('edital_para_editar')
+                if edital_id:
+                    pagina_editar_edital(edital_id)
+                else:
+                    st.error("ID do edital não encontrado")
+                    st.session_state['pagina_atual'] = 'projetos'
+                    st.rerun()
+            elif final_target_page == 'assinatura':
+                pagina_assinatura()
+            else:
+                # Fallback for unknown authenticated page
+                st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
                 st.rerun()
-        elif final_target_page == 'assinatura':
-            pagina_assinatura()
-        else:
-            # Fallback for unknown authenticated page
-            st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
-            st.rerun()
 
 if __name__ == '__main__':
     main()

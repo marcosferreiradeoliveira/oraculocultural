@@ -1,6 +1,7 @@
 # Core
 streamlit==1.38.0
 firebase-admin==6.2.0
+streamlit-analytics==0.4.1
 
 # Firebase dependencies (versões compatíveis)
 google-auth==2.28.1
