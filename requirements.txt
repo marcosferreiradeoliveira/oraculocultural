@@ -1,28 +1,26 @@
-# Core
-streamlit==1.38.0
-firebase-admin==6.2.0
+google-cloud-firestore
+streamlit-option-menu
 streamlit-analytics==0.4.1
-
-# Firebase dependencies (versões compatíveis)
-google-auth==2.28.1
-google-cloud-firestore==2.15.0
-google-api-python-client==2.125.0
-grpcio==1.62.2
-protobuf==4.25.3  # Versão atualizada para resolver conflitos
-
-# LangChain
-langchain==0.3.0
-langchain-community==0.3.0
-langchain-groq==0.2.0
-langchain-openai==0.2.0
-
-# Outras dependências
-python-dotenv==1.0.1
-beautifulsoup4==4.12.3
-pypdf>=3.17.0
-unstructured==0.15.13
-fake-useragent==1.5.1
-youtube-transcript-api==0.6.2
-PyPDF2==3.0.1
-pdfplumber>=0.10.3
-mercadopago==2.3.0
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+mercadopago
+python-dotenv
+langchain-openai
+langchain
+firebase-admin
+beautifulsoup4
+PyPDF2
+python-docx
+numpy
+pandas
+requests
+Pillow
+gunicorn
+Unidecode
+psycopg2-binary
+protobuf==3.20.0
+chardet
+urllib3
+idna
+certifi
