@@ -75,6 +75,22 @@ from services.firebase_init import initialize_firebase, get_error_message
 FIREBASE_APP_INITIALIZED = False 
 FIREBASE_INIT_ERROR_MESSAGE = None
 
+def inject_ga():
+    GA_ID = "488488064"  # Substitua pela sua ID de Métricas
+
+    GA_SCRIPT = f"""
+        <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){{dataLayer.push(arguments);}}
+          gtag('js', new Date());
+          gtag('config', '{GA_ID}');
+        </script>
+    """
+    # st.components.v1.html é a forma recomendada para injetar HTML/JS
+    st.components.v1.html(GA_SCRIPT, height=0)
+
+
 def initialize_firebase_app():
     global FIREBASE_APP_INITIALIZED, FIREBASE_INIT_ERROR_MESSAGE
     
@@ -929,6 +945,7 @@ def pagina_novo_projeto():
 
 def main():
     """Função principal da aplicação"""
+    inject_ga()
     print(f"DEBUG main(): Verificando FIREBASE_APP_INITIALIZED = {FIREBASE_APP_INITIALIZED}. Erro capturado: {FIREBASE_INIT_ERROR_MESSAGE}")
     
     # Verifica se o Firebase foi inicializado corretamente
