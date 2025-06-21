@@ -76,7 +76,7 @@ FIREBASE_APP_INITIALIZED = False
 FIREBASE_INIT_ERROR_MESSAGE = None
 
 def inject_ga():
-    GA_ID = "488488064"  # Substitua pela sua ID de Métricas
+    GA_ID = "G-Z5YJBVKP9B"  # Substitua pela sua ID de Métricas
 
     GA_SCRIPT = f"""
         <script async src="https://www.googletagmanager.com/gtag/js?id={GA_ID}"></script>
