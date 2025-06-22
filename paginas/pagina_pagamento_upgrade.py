@@ -4,7 +4,6 @@ import mercadopago
 import os
 import uuid
 import firebase_admin
-from google.cloud.firestore_v1 import FieldFilter
 import time
 from services.firebase_init import initialize_firebase, get_error_message
 from constants import AUTENTICADO_SESSION_KEY
