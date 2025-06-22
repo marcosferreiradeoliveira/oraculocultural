@@ -5,7 +5,6 @@ import traceback
 import time
 from components import welcome_popup
 from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY
-from google.cloud.firestore_v1 import FieldFilter
 from services.firebase_init import initialize_firebase, get_error_message
 from utils.analytics import track_event, track_page_view
 
@@ -30,7 +29,7 @@ def pagina_projetos():
     # Get user's full name from database
     try:
         db = firestore.client()
-        user_doc = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_info['uid'])).limit(1).get()
+        user_doc = db.collection('usuarios').where('uid', '==', user_info['uid']).limit(1).get()
         user_data = next(user_doc, None)
         if user_data:
             user_data = user_data.to_dict()

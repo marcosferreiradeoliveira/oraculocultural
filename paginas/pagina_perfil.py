@@ -83,7 +83,7 @@ def pagina_perfil():
         db = firestore.client()
         user_uid_auth = user_info.get('uid') # UID do Firebase Auth
         if user_uid_auth:
-            usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid_auth)).limit(1).stream()
+            usuarios_query = db.collection('usuarios').where('uid', '==', user_uid_auth).limit(1).stream()
             
             usuario_doc_data = None
             for doc in usuarios_query: # Deve haver no máximo um resultado devido ao limit(1)
@@ -125,7 +125,7 @@ def pagina_perfil():
                 if st.button("💾 Salvar Biografia", key="salvar_bio"):
                     try:
                         # Encontrar o documento do usuário pelo UID
-                        usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid_auth)).limit(1).stream()
+                        usuarios_query = db.collection('usuarios').where('uid', '==', user_uid_auth).limit(1).stream()
                         for doc in usuarios_query:
                             doc_ref = db.collection('usuarios').document(doc.id)
                             doc_ref.update({

@@ -56,7 +56,7 @@ def pagina_assinatura():
         db = firestore.client()
         user_uid_auth = user_info.get('uid')
         if user_uid_auth:
-            usuarios_query = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_uid_auth)).limit(1).stream()
+            usuarios_query = db.collection('usuarios').where('uid', '==', user_uid_auth).limit(1).stream()
             
             usuario_doc_data = None
             for doc in usuarios_query:

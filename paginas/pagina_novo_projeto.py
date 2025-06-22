@@ -1,5 +1,4 @@
 import streamlit as st
-from google.cloud.firestore_v1 import FieldFilter
 import time
 from services.firebase_init import initialize_firebase, get_error_message
 from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY

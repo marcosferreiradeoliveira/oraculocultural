@@ -23,7 +23,6 @@ from analise import (
 import re
 import os
 import random
-from google.cloud.firestore_v1 import FieldFilter
 from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY
 from utils.analytics import track_event, track_page_view
 
