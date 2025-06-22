@@ -67,7 +67,7 @@ else:
         
         Erro: {str(e)}
         
-        Por favor, verifique se o conteúdo da variável FIREBASE_CREDENTIALS é um JSON válido.
+        Por favor, verifique se o conteúdo da variável a FIREBASE_CREDENTIALS é um JSON válido.
         """)
         st.stop()
 
