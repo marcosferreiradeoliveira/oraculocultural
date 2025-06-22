@@ -74,10 +74,8 @@ else:
 # As importações necessárias devem vir após a configuração da página
 from langchain_openai import ChatOpenAI
 import datetime
-from google.cloud.firestore_v1 import FieldFilter
 import time
 import firebase_admin
-from google.cloud.firestore_v1 import FieldFilter
 from google.api_core.datetime_helpers import DatetimeWithNanoseconds as GCloudTimestamp
 import json
 from streamlit.runtime.secrets import AttrDict
@@ -528,7 +526,7 @@ def get_user_projects(user_id):
         return []
     try:
         db = firestore.client()
-        projetos_ref = db.collection('projetos').where(filter=FieldFilter('user_id', '==', user_id)).order_by('data_criacao', direction=firestore.Query.DESCENDING)
+        projetos_ref = db.collection('projetos').where('user_id', '==', user_id).order_by('data_criacao', direction=firestore.Query.DESCENDING)
         projetos_stream = projetos_ref.stream()
         projetos_lista = [{'id': doc.id, **doc.to_dict()} for doc in projetos_stream]
         return projetos_lista
@@ -558,7 +556,7 @@ def pagina_projetos():
     # Get user's full name from database
     try:
         db = firestore.client()
-        user_doc = db.collection('usuarios').where(filter=FieldFilter('uid', '==', user_info['uid'])).limit(1).get()
+        user_doc = db.collection('usuarios').where('uid', '==', user_info['uid']).limit(1).get()
         user_data = next(user_doc, None)
         if user_data:
             user_data = user_data.to_dict()
@@ -862,7 +860,7 @@ def pagina_novo_projeto():
                     st.balloons()
                     
                     # Get the newly created project ID
-                    projetos_ref = db.collection('projetos').where(filter=FieldFilter('user_id', '==', user_uid)).order_by('data_criacao', direction=firestore.Query.DESCENDING).limit(1)
+                    projetos_ref = db.collection('projetos').where('user_id', '==', user_uid).order_by('data_criacao', direction=firestore.Query.DESCENDING).limit(1)
                     novo_projeto = next(projetos_ref.stream())
                     
                     # Set the project in session state and redirect to edit page
