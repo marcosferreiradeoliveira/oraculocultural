@@ -7,7 +7,7 @@ import firebase_admin
 import time
 from services.firebase_init import initialize_firebase, get_error_message
 from constants import AUTENTICADO_SESSION_KEY
-from utils.analytics import track_event, track_page_view
+from utils.streamlit_analytics_helper import log_analytics_event
 from services.env_manager import get_env_value
 
 # Função para obter a URL base da aplicação
@@ -30,8 +30,7 @@ def pagina_pagamento_upgrade():
     """
     Página de Upgrade de Plano
     """
-    # Track page view
-    track_page_view('Upgrade Payment Page')
+    log_analytics_event('view_upgrade_payment_page')
     
     # Inicializa o Firebase (com cache)
     firebase_app = initialize_firebase()
@@ -99,7 +98,7 @@ def pagina_pagamento_upgrade():
     )
 
     if st.button("💳 Pagar com Mercado Pago e Ativar Premium", type="primary", use_container_width=True):
-        track_event('upgrade_click')
+        log_analytics_event('upgrade_click')
         try:
             start_time = time.time()
             sdk = mercadopago.SDK(mp_access_token)
@@ -150,7 +149,7 @@ def pagina_pagamento_upgrade():
                 end_time = time.time()
                 processing_time = end_time - start_time
                 
-                track_event('upgrade_success', {
+                log_analytics_event('upgrade_success', {
                     'processing_time': processing_time,
                     'user_email': payer_email
                 })
@@ -161,7 +160,7 @@ def pagina_pagamento_upgrade():
                 st.write("Verifique se as credenciais do Mercado Pago estão configuradas corretamente e se o e-mail do usuário é válido.")
 
         except Exception as e:
-            track_event('upgrade_failed', {
+            log_analytics_event('upgrade_failed', {
                 'error_message': str(e)
             })
             st.error(f"Ocorreu um erro ao processar o pagamento: {str(e)}")

@@ -24,7 +24,7 @@ import re
 import os
 import random
 from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY
-from utils.analytics import track_event, track_page_view
+from utils.streamlit_analytics_helper import log_analytics_event
 
 llm = get_llm() # LLM global instanciada
 
@@ -50,9 +50,7 @@ def retry_with_backoff(func, max_retries=3, initial_delay=1):
 
 def pagina_editar_projeto():
     """Página de edição com menu lateral de 3 seções"""
-    
-    # Track page view
-    track_page_view('Edit Project Page')
+    log_analytics_event('view_edit_project_page')
     
     # Initialize secao_atual if not present
     if 'secao_atual' not in st.session_state:
@@ -753,7 +751,7 @@ Novo Texto: [forneça o novo texto que deve substituir o trecho original]
         if edital_associado_id:
             if not lista_documentos_sugeridos:
                 if st.button("🔍 Analisar Edital para Sugerir Documentos", key=f"analisar_edital_docs_{projeto_id}"):
-                    track_event('generate_document_click')
+                    log_analytics_event('generate_document_click')
                     with st.spinner(f"Analisando edital ID: {edital_associado_id}... Isso pode levar um momento."):
                         try:
                             edital_doc_ref = db.collection('editais').document(edital_associado_id)
@@ -857,7 +855,7 @@ Não inclua números ou marcadores na lista, apenas um nome de documento por lin
             # Botão para (Re)Gerar o documento
             if st.button(f"🔄 Gerar Nova Versão de '{tipo_selecionado_nome}'" if documento_existente_conteudo else f"✨ Gerar '{tipo_selecionado_nome}'", 
                          key=f"btn_gerar_{chave_doc_selecionado}_{projeto_id}"):
-                track_event('generate_document_click')
+                log_analytics_event('generate_document_click')
                 with st.spinner(f"Gerando '{tipo_selecionado_nome}'..."):
                     try:
                         # Criar um container vazio para o streaming

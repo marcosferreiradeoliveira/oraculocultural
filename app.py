@@ -7,19 +7,6 @@ import json # Importado para tentar carregar JSON de string
 import datetime # Para trabalhar com datas e horas
 import streamlit_analytics
 
-def log_analytics_event(event_name, properties={}):
-    """Helper function to log events to streamlit-analytics."""
-    try:
-        # The log_event function from streamlit-analytics expects key-value pairs as *args
-        args = []
-        for key, value in properties.items():
-            args.append(str(key))
-            args.append(str(value))
-        streamlit_analytics.log_event(event_name, *args)
-    except Exception as e:
-        # Log silently to not break the app if analytics fails
-        print(f"DEBUG: Failed to log analytics event '{event_name}': {e}")
-
 # Configuração da página - DEVE ser o primeiro comando Streamlit
 st.set_page_config(
     page_title="Oráculo Cultural",
@@ -962,4 +949,5 @@ def main():
             st.rerun()
 
 if __name__ == '__main__':
-    main()
+    with streamlit_analytics.track():
+        main()

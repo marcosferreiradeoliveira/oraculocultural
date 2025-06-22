@@ -2,12 +2,11 @@ import streamlit as st
 import time
 from services.firebase_init import initialize_firebase, get_error_message
 from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY
-from utils.analytics import track_event, track_page_view
+from utils.streamlit_analytics_helper import log_analytics_event
 
 def pagina_novo_projeto():
     """Exibe a página de criação de novo projeto"""
-    # Track page view
-    track_page_view('New Project Page')
+    log_analytics_event('view_new_project_page')
     
     # Inicializa o Firebase (com cache)
     firebase_app = initialize_firebase_app()
@@ -53,7 +52,7 @@ def pagina_novo_projeto():
         if submitted:
             if not nome or not descricao or not categoria:
                 st.error("Por favor, preencha todos os campos obrigatórios (*).")
-                track_event('project_creation_attempt', {'status': 'failed', 'reason': 'empty_fields'})
+                log_analytics_event('project_creation_attempt', {'status': 'failed', 'reason': 'empty_fields'})
             else:
                 try:
                     start_time = time.time()
@@ -61,7 +60,7 @@ def pagina_novo_projeto():
                     user_uid = st.session_state.get(USER_SESSION_KEY, {}).get('uid')
                     if not user_uid:
                         st.error("Erro: Usuário não identificado. Faça login novamente.")
-                        track_event('project_creation_attempt', {'status': 'failed', 'reason': 'user_not_found'})
+                        log_analytics_event('project_creation_attempt', {'status': 'failed', 'reason': 'user_not_found'})
                         return
 
                     edital_id_selecionado = edital_options[nome_edital_selecionado]
@@ -80,7 +79,7 @@ def pagina_novo_projeto():
                     creation_time = end_time - start_time
                     
                     # Track successful project creation
-                    track_event('project_creation_success', {
+                    log_analytics_event('project_creation_success', {
                         'project_name': nome,
                         'category': categoria,
                         'has_edital': bool(edital_id_selecionado),
@@ -92,7 +91,7 @@ def pagina_novo_projeto():
                     st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
                     st.rerun()
                 except Exception as e:
-                    track_event('project_creation_attempt', {
+                    log_analytics_event('project_creation_attempt', {
                         'status': 'failed',
                         'reason': 'error',
                         'error_message': str(e)
@@ -100,6 +99,6 @@ def pagina_novo_projeto():
                     st.error(f"Erro ao salvar projeto: {str(e)}")
     
     if st.button("⬅️ Voltar para Projetos"):
-        track_event('back_to_projects_click')
+        log_analytics_event('back_to_projects_click')
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'projetos'
         st.rerun() 

@@ -6,12 +6,11 @@ import time
 from components import welcome_popup
 from constants import USER_SESSION_KEY, AUTENTICADO_SESSION_KEY, PAGINA_ATUAL_SESSION_KEY
 from services.firebase_init import initialize_firebase, get_error_message
-from utils.analytics import track_event, track_page_view
+from utils.streamlit_analytics_helper import log_analytics_event
 
 def pagina_projetos():
     """Exibe a página de projetos com layout moderno e otimizado"""
-    # Track page view
-    track_page_view('Projects Page')
+    log_analytics_event('view_projects_page')
     
     # Inicializa o Firebase (com cache)
     firebase_app = initialize_firebase_app()
@@ -42,7 +41,7 @@ def pagina_projetos():
     # Projetos Section
     st.markdown('<div class="section-header"><h2>🎨 Meus Projetos Culturais</h2>', unsafe_allow_html=True)
     if st.button("✨ Criar Novo Projeto", key="btn_novo_projeto", type="primary"):
-        track_event('create_project_click')
+        log_analytics_event('create_project_click')
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'novo_projeto'
         if PROJETO_SELECIONADO_KEY in st.session_state: del st.session_state[PROJETO_SELECIONADO_KEY]
         if TEXTO_PROJETO_KEY in st.session_state: del st.session_state[TEXTO_PROJETO_KEY]
