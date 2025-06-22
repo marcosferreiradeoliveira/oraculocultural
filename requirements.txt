@@ -26,3 +26,4 @@ idna
 certifi
 setuptools
 langchain_community
+fake-useragent
