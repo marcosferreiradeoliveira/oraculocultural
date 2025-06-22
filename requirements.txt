@@ -25,3 +25,4 @@ urllib3
 idna
 certifi
 setuptools
+langchain_community
