@@ -1,6 +1,5 @@
 import streamlit as st
 from firebase_admin import firestore
-from google.cloud.firestore_v1 import FieldFilter
 from google.api_core.datetime_helpers import DatetimeWithNanoseconds as GCloudTimestamp
 from constants import (
     USER_SESSION_KEY, 
