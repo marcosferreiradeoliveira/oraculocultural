@@ -20,6 +20,14 @@ st.set_page_config(
     }
 )
 
+st.markdown("""
+    <style>
+    .stAlert, .stNotification, .stException, .stWarning {
+        display: none !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Carregar variáveis de ambiente do arquivo .env (para desenvolvimento local)
 load_dotenv()
 

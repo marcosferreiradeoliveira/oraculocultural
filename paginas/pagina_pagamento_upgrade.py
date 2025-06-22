@@ -206,9 +206,10 @@ def pagina_payment_success():
 
     st.write("Obrigado por se juntar ao Oráculo Cultural Premium!")
     
-    preference_id = st.query_params.get("pref_id", [None])[0]
-    mp_payment_id = st.query_params.get("payment_id", [None])[0]
-    mp_status = st.query_params.get("status", [None])[0]
+    params = st.experimental_get_query_params()
+    preference_id = params.get("pref_id", [None])[0]
+    mp_payment_id = params.get("payment_id", [None])[0]
+    mp_status = params.get("status", [None])[0]
 
     if preference_id:
         st.write(f"ID da Preferência da transação: {preference_id}")
@@ -229,7 +230,8 @@ def pagina_payment_failure():
     st.error("Houve um problema ao processar seu pagamento. Nenhuma cobrança foi realizada.")
     st.write("Por favor, tente novamente ou utilize outro método de pagamento, se disponível.")
     
-    preference_id = st.query_params.get("pref_id", [None])[0]
+    params = st.experimental_get_query_params()
+    preference_id = params.get("pref_id", [None])[0]
     if preference_id:
         st.write(f"ID da Tentativa de transação: {preference_id}")
 
@@ -245,7 +247,8 @@ def pagina_payment_pending():
     st.warning("Seu pagamento está pendente de processamento.")
     st.write("Isso pode acontecer com alguns métodos de pagamento como boleto bancário. Assim que o pagamento for confirmado, seu plano será ativado.")
     
-    preference_id = st.query_params.get("pref_id", [None])[0]
+    params = st.experimental_get_query_params()
+    preference_id = params.get("pref_id", [None])[0]
     if preference_id:
         st.write(f"ID da transação: {preference_id}")
 
