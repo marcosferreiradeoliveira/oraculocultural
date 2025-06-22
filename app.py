@@ -878,7 +878,7 @@ def main():
     if PAGINA_ATUAL_SESSION_KEY not in st.session_state:
         st.session_state[PAGINA_ATUAL_SESSION_KEY] = 'cadastro'
     # Verificar se há um parâmetro 'page' na URL (vindo de redirects externos como Mercado Pago)
-    query_params = st.query_params
+    query_params = st.experimental_get_query_params()
     if "page" in query_params:
         page_from_query_list = query_params.get("page")
         if page_from_query_list:
@@ -888,7 +888,7 @@ def main():
             if page_from_query in allowed_query_pages:
                 st.session_state[PAGINA_ATUAL_SESSION_KEY] = page_from_query
                 # Limpar os query_params para evitar re-roteamento em reruns internos
-                st.query_params.clear()
+                st.experimental_set_query_params()
     # Verifica se o usuário está autenticado
     is_authenticated = st.session_state.get(AUTENTICADO_SESSION_KEY, False)
     current_page_on_entry = st.session_state[PAGINA_ATUAL_SESSION_KEY]
