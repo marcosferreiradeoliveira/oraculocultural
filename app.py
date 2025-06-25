@@ -6,6 +6,7 @@ from firebase_admin import firestore # Adicionar importação do firestore
 import json # Importado para tentar carregar JSON de string
 import datetime # Para trabalhar com datas e horas
 import streamlit_analytics
+import streamlit.components.v1 as components
 
 # Configuração da página - DEVE ser o primeiro comando Streamlit
 st.set_page_config(
@@ -19,6 +20,11 @@ st.set_page_config(
         'About': "# Oráculo Cultural\nSua plataforma para decifrar o universo da cultura."
     }
 )
+
+# Inclui o código do Google Analytics
+with open("google_analytics.html", "r") as f:
+    html_code = f.read()
+    components.html(html_code, height=0)
 
 st.markdown("""
     <style>
@@ -96,6 +102,17 @@ def initialize_firebase_app():
 
 # Inicializa o Firebase antes de qualquer outra coisa
 initialize_firebase_app()
+
+def add_google_analytics():
+    st.markdown("""
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Z5YJBVKP9B"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-Z5YJBVKP9B');
+    </script>
+    """, unsafe_allow_html=True)
 
 # Configuração do OpenAI
 llm = None
@@ -512,7 +529,6 @@ st.markdown("""
         }
     </style>
 """, unsafe_allow_html=True)
-
 
 def get_user_projects(user_id):
     print(f"DEBUG get_user_projects: Verificando Firebase. Initialized={FIREBASE_APP_INITIALIZED}")
@@ -957,5 +973,5 @@ def main():
             st.rerun()
 
 if __name__ == '__main__':
-    with streamlit_analytics.track():
-        main()
+    add_google_analytics()
+    main()
