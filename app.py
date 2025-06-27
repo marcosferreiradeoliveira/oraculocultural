@@ -5,7 +5,6 @@ from dotenv import load_dotenv # Importar load_dotenv
 from firebase_admin import firestore # Adicionar importação do firestore
 import json # Importado para tentar carregar JSON de string
 import datetime # Para trabalhar com datas e horas
-import streamlit_analytics
 import streamlit.components.v1 as components
 
 # Configuração da página - DEVE ser o primeiro comando Streamlit
@@ -21,10 +20,42 @@ st.set_page_config(
     }
 )
 
-# Inclui o código do Google Analytics
-with open("google_analytics.html", "r") as f:
-    html_code = f.read()
-    components.html(html_code, height=0)
+def add_google_analytics():
+    """
+    Adiciona o script base do Google Analytics (gtag.js) ao cabeçalho da página.
+    Este script é necessário para que a função `track_pageview` funcione.
+    Ele é injetado de forma invisível no HTML.
+    """
+    ga_script = """
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Z5YJBVKP9B"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-Z5YJBVKP9B');
+    </script>
+    """
+    components.html(ga_script, height=0)
+
+# Adicione esta nova função junto com a anterior
+def track_pageview(page_name):
+    """
+    Envia um evento de visualização de página (page_view) para o Google Analytics.
+    Deve ser chamado toda vez que a página lógica da aplicação mudar.
+
+    Argumentos:
+        page_name (str): O nome da página para ser exibido no Google Analytics.
+                         Ex: 'login', 'projetos', 'editar_projeto'.
+    """
+    tracking_script = f"""
+    <script>
+        gtag('event', 'page_view', {{
+            page_title: '{page_name}',
+            page_path: '/{page_name}'
+        }});
+    </script>
+    """
+    components.html(tracking_script, height=0)
 
 st.markdown("""
     <style>
@@ -102,17 +133,6 @@ def initialize_firebase_app():
 
 # Inicializa o Firebase antes de qualquer outra coisa
 initialize_firebase_app()
-
-def add_google_analytics():
-    st.markdown("""
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Z5YJBVKP9B"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-Z5YJBVKP9B');
-    </script>
-    """, unsafe_allow_html=True)
 
 # Configuração do OpenAI
 llm = None
@@ -916,7 +936,8 @@ def main():
     # Verifica se o usuário está autenticado
     is_authenticated = st.session_state.get(AUTENTICADO_SESSION_KEY, False)
     current_page_on_entry = st.session_state[PAGINA_ATUAL_SESSION_KEY]
-    final_target_page = current_page_on_entry # Página que será renderizada por padrão
+        track_pageview(current_page_on_entry)
+ # Página que será renderizada por padrão
     # Se não estiver autenticado, mostra a página de login, cadastro ou reset de senha
     if not is_authenticated:
         if current_page_on_entry == 'cadastro':
@@ -973,5 +994,6 @@ def main():
             st.rerun()
 
 if __name__ == '__main__':
-    add_google_analytics()
-    main()
+        add_google_analytics()
+
+        main()
