@@ -20,6 +20,63 @@ st.set_page_config(
     }
 )
 
+def debug_ga_injection(page_name):
+    """
+    VERSÃO DE DEPURAÇÃO para o Google Analytics.
+    Cria um componente visível e loga cada passo no console do navegador
+    para identificar exatamente onde está o ponto de falha.
+    """
+    st.markdown("---")
+    st.warning("MODO DE DEPURAÇÃO DO GOOGLE ANALYTICS ATIVADO")
+    st.markdown("---")
+    
+    debug_script = f"""
+    <div style="border: 2px dashed red; padding: 10px; margin: 10px; border-radius: 5px;">
+        <h4>Painel de Depuração do Google Analytics</h4>
+        <p>Esta caixa deve estar visível. Se não estiver, o components.html não está renderizando.</p>
+        <p>Abra o console do navegador (F12) para ver os logs detalhados.</p>
+        <p>Página sendo rastreada: <strong>{page_name}</strong></p>
+    </div>
+
+    <script>
+        // Funções de callback para saber se o script do Google carregou ou falhou
+        function ga_loaded() {{
+            console.log("✅ SUCESSO: O script principal 'gtag.js' foi carregado com sucesso!");
+            
+            // Como o script carregou, podemos prosseguir com segurança
+            try {{
+                console.log("3. Configurando o GA e disparando page_view para a página: '{page_name}'");
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){{dataLayer.push(arguments);}}
+                gtag('js', new Date());
+                gtag('config', 'G-Z5YJBVKP9B', {{ 'cookie_domain': 'none' }});
+                gtag('event', 'page_view', {{
+                    page_title: '{page_name}',
+                    page_path: '/{page_name}'
+                }});
+                console.log("4. Script de depuração CONCLUÍDO. Verifique o Google Analytics > Tempo Real.");
+            }} catch (e) {{
+                console.error("❌ ERRO INESPERADO após o carregamento do gtag.js:", e);
+            }}
+        }}
+
+        function ga_failed() {{
+            console.error("❌ FALHA CRÍTICA: O script principal 'gtag.js' FALHOU ao carregar. Verifique bloqueadores de anúncio, firewall ou problemas de rede.");
+        }}
+
+        // Ponto de partida
+        console.log("1. Script de depuração INICIADO.");
+        console.log("2. Tentando carregar o script principal 'gtag.js' do Google...");
+    </script>
+    
+    <script async 
+            src="https://www.googletagmanager.com/gtag/js?id=G-Z5YJBVKP9B" 
+            onload="ga_loaded()" 
+            onerror="ga_failed()">
+    </script>
+    """
+    components.html(debug_script, height=200) # Usamos height para garantir que a caixa seja visível
+
 def inject_ga_and_track_pageview(page_name):
     """
     Injeta o script completo do Google Analytics e dispara um evento de page_view.
@@ -921,7 +978,8 @@ def main():
     current_page_on_entry = st.session_state[PAGINA_ATUAL_SESSION_KEY]
     
     # Rastreia a página atual ANTES de renderizá-la
-    inject_ga_and_track_pageview(current_page_on_entry)
+    debug_ga_injection(current_page_on_entry)
+
 
     
     final_target_page = current_page_on_entry  # Define a página alvo padrão
